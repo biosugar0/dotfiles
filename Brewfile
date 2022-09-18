@@ -47,7 +47,7 @@ brew "stern"
 brew "stylua"
 brew "terraform"
 brew "terraformer"
-brew "tmux", args: ["HEAD"]
+brew "tmux"
 brew "tree"
 brew "vim"
 brew "volta"
