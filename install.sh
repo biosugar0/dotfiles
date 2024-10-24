@@ -34,8 +34,8 @@ mkdir -p $HOME/.config/
 
 # .config/zshでzshの設定を管理するため、ZDOTDIRを指定する
 new_content="ZDOTDIR=\$HOME/.config/zsh"
-# /etc/zshenv に追記する (完全上書きする場合は `tee` をそのまま使う)
-echo "$new_content" | sudo tee -a /etc/zshenv > /dev/null
+# /etc/zshenv に追記する
+echo "$new_content" | sudo tee /etc/zshenv > /dev/null
 # 成功メッセージの表示
 if [[ $? -eq 0 ]]; then
   echo "/etc/zshenv was successfully updated."
