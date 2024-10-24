@@ -127,6 +127,17 @@ return {
             "GinPatch",
             "GinStatus",
         },
+        keys = {
+            "<Leader>aa",
+            "<Leader>ab",
+            "<Leader>ap",
+            "<Leader>ac",
+            "<Leader>aC",
+            "<Leader>al",
+            "<Leader>aL",
+            "<Leader>ao",
+            "<Leader>aw",
+        },
         config = function()
             -- Key Mappings
             vim.keymap.set("n", "<Leader>aa", "<Cmd>GinStatus<CR>", { silent = true })
