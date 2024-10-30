@@ -1,19 +1,19 @@
 return {
-	{
-		"cocopon/iceberg.vim",
-		config = function()
-			-- カラースキームの設定
-			vim.cmd([[colorscheme iceberg]])
+  {
+    'cocopon/iceberg.vim',
+    config = function()
+      -- カラースキームの設定
+      vim.cmd([[colorscheme iceberg]])
 
-			-- ハイライトをカスタマイズするためのautocmd
-			vim.api.nvim_create_augroup("MyColor", { clear = true })
+      -- ハイライトをカスタマイズするためのautocmd
+      vim.api.nvim_create_augroup('MyColor', { clear = true })
 
-			vim.api.nvim_create_autocmd("ColorScheme", {
-				group = "MyColor",
-				pattern = "*",
-				callback = function()
-					-- カラースキームがロードされた際にハイライトをカスタマイズ
-					vim.cmd([[
+      vim.api.nvim_create_autocmd('ColorScheme', {
+        group = 'MyColor',
+        pattern = '*',
+        callback = function()
+          -- カラースキームがロードされた際にハイライトをカスタマイズ
+          vim.cmd([[
                       hi Normal guibg=#000000
                       hi SignColumn guibg=#000000
                       hi GitGutterAdd ctermfg=150 ctermbg=235 guifg=#b4be82 guibg=#000000
@@ -25,8 +25,8 @@ return {
                       hi Pmenu ctermfg=251 ctermbg=236 guifg=#c6c8d1 guibg=#1f2335 blend=20
                       hi VertSplit cterm=NONE ctermbg=233 ctermfg=233 gui=NONE guibg=#000000 guifg=#253f4d
                     ]])
-				end,
-			})
-		end,
-	},
+        end,
+      })
+    end,
+  },
 }
