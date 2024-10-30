@@ -70,6 +70,76 @@ return {
     },
     build = 'make tiktoken', -- MacOSやLinux向けビルド
     config = function()
+      local function parse_diff(diff_output)
+        local diff_lines = {}
+        local current_old_line, current_new_line
+
+        -- 各行を解析
+        for line in diff_output:gmatch('[^\r\n]+') do
+          -- diffブロックの行番号を解析 (例: @@ -21,6 +21,7 @@)
+          local old_line_start, old_line_count, new_line_start, new_line_count =
+            line:match('^@@ %-(%d+),?(%d*) %+(%d+),?(%d*) @@')
+
+          if old_line_start and new_line_start then
+            -- 行番号が見つかった場合
+            table.insert(diff_lines, line)
+            -- 行番号の初期化
+            current_old_line = tonumber(old_line_start)
+            current_new_line = tonumber(new_line_start)
+          elseif line:sub(1, 1) == '-' and current_old_line then
+            -- 変更前の行（`-`で始まる）
+            table.insert(diff_lines, string.format('%d: %s', current_old_line, line))
+            current_old_line = current_old_line + 1
+          elseif line:sub(1, 1) == '+' and current_new_line then
+            -- 変更後の行（`+`で始まる）
+            table.insert(diff_lines, string.format('%d: %s', current_new_line, line))
+            current_new_line = current_new_line + 1
+          else
+            -- コンテキスト行（変更なし）で行番号がnilでない場合
+            if current_old_line and current_new_line then
+              table.insert(diff_lines, string.format('   %s', line))
+              current_old_line = current_old_line + 1
+              current_new_line = current_new_line + 1
+            end
+          end
+        end
+
+        -- テーブルの内容を文字列に変換して返す
+        return table.concat(diff_lines, '\n')
+      end
+
+      -- diffの出力を取得する関数
+      local function gitdiff(select, source, staged)
+        local select_buffer = select.buffer(source)
+        if not select_buffer then
+          return nil
+        end
+
+        local bufname = vim.api.nvim_buf_get_name(source.bufnr)
+        local file_path = bufname:gsub('^%w+://', '')
+        local dir = vim.fn.fnamemodify(file_path, ':h')
+        if not dir or dir == '' then
+          return nil
+        end
+        dir = dir:gsub('.git$', '')
+
+        local cmd = 'git -C ' .. dir .. ' diff --no-color --no-ext-diff' .. (staged and ' --staged' or '')
+        local handle = io.popen(cmd)
+        if not handle then
+          return nil
+        end
+
+        local result = handle:read('*a')
+        handle:close()
+        if not result or result == '' then
+          return nil
+        end
+
+        select_buffer.filetype = 'diff'
+        select_buffer.lines = parse_diff(result) -- 構造化したdiffをlinesに格納
+        return select_buffer
+      end
+
       local select = require('CopilotChat.select')
       local prompts = {
         -- コード関連のプロンプト
@@ -79,24 +149,59 @@ return {
         },
         Review = {
           prompt = [[
-/COPILOT_REVIEW
-コードをレビューし、改善提案を行ってください。
-以下の形式で指摘を行ってください：
+与えられたコードのdiffをレビューし、特に読みやすさと保守性に焦点を当ててください。
+以下に関連する問題を特定してください：
+- 名前付け規則が不明確、誤解を招く、または使用されている言語の規則に従っていない場合。
+- 不要なコメントの有無、または必要なコメントが不足している場合。
+- 複雑すぎる表現があり、簡素化が望ましい場合。
+- ネストのレベルが高く、コードが追いづらい場合。
+- 変数や関数に対して名前が過剰に長い場合。
+- 命名、フォーマット、または全体的なコーディングスタイルに一貫性が欠けている場合。
+- 抽象化や最適化によって効率的に処理できる繰り返しのコードパターンがある場合。
 
-line=<行番号>: <指摘内容>
-または
-line=<開始行>-<終了行>: <指摘内容>
+フィードバックは簡潔に行い、各特定された問題について次の要素を直接示してください：
+- 問題が見つかった具体的な行番号
+- 問題の明確な説明
+- 改善または修正方法に関する具体的な提案
 
-指摘は具体的に、かつ日本語で記述してください。
+フィードバックの形式は次のようにしてください：
+line=<行番号>: <問題の説明>
+
+問題が複数行にわたる場合は、次の形式を使用してください：
+line=<開始行>-<終了行>: <問題の説明>
+
+同じ行に複数の問題がある場合は、それぞれの問題を同じフィードバック内でセミコロンで区切って記載してください。
+
+フィードバック例：
+line=3: 変数名「x」が不明瞭です。変数宣言の横にあるコメントは不要です。
+line=8: 式が複雑すぎます。式をより簡単な要素に分解してください。
+line=10: この部分でのキャメルケースの使用はLuaの慣例に反します。スネークケースを使用してください。
+line=11-15: ネストが過剰で、コードの追跡が困難です。ネストレベルを減らすためにリファクタリングを検討してください。
+
+コードスニペットに読みやすさの問題がない場合、その旨を簡潔に記し、コードが明確で十分に書かれていることを確認してください。
+
+diffの出力には、変更された行やその位置を示す情報が含まれています。この情報を用いて、**変更後のコードの正確な行番号**を特定し、その行番号に基づいて指摘を行ってください。
+
 重要度に応じて以下のキーワードを含めてください：
 - 重大な問題: "error:" または "critical:"
 - 警告: "warning:"
 - スタイル的な提案: "style:"
 - その他の提案: "suggestion:"
 ]],
+          selection = function(source)
+            local bufnr = source.bufnr
+            -- バッファのファイルパスを取得
+            local selction_table = gitdiff(select, source, true)
+            -- selction_tableがnilじゃなかったらfile_path だけのdiffを使うようにする
+            if selction_table then
+              local file_path = vim.api.nvim_buf_get_name(bufnr)
+              selction_table.prompt_extra = '\n与えられたdiffのうち、'
+                .. file_path
+                .. ' の変更に対してレビューを行ってください。'
+            end
+            return selction_table
+          end,
           callback = function(response, source)
-            print('レビュー結果:', response)
-            print('ソース:', vim.inspect(source))
             -- 名前空間の作成とクリーンアップ
             local ns = vim.api.nvim_create_namespace('copilot_review')
             vim.diagnostic.reset(ns)
