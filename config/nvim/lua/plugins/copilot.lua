@@ -66,6 +66,7 @@ return {
     dependencies = {
       { 'zbirenbaum/copilot.lua' }, -- Copilotのコアモジュール
       { 'nvim-lua/plenary.nvim' }, -- Neovimのユーティリティ関数を提供
+      { 'rcarriga/nvim-notify' },
     },
     build = 'make tiktoken', -- MacOSやLinux向けビルド
     config = function()
@@ -77,16 +78,45 @@ return {
           selection = select.visual,
         },
         Review = {
-          prompt = '/COPILOT_REVIEW このコードをレビューし、改善の提案をしてください。',
+          prompt = [[
+/COPILOT_REVIEW
+コードをレビューし、改善提案を行ってください。
+以下の形式で指摘を行ってください：
+
+line=<行番号>: <指摘内容>
+または
+line=<開始行>-<終了行>: <指摘内容>
+
+指摘は具体的に、かつ日本語で記述してください。
+重要度に応じて以下のキーワードを含めてください：
+- 重大な問題: "error:" または "critical:"
+- 警告: "warning:"
+- スタイル的な提案: "style:"
+- その他の提案: "suggestion:"
+]],
           callback = function(response, source)
+            print('レビュー結果:', response)
+            print('ソース:', vim.inspect(source))
+            -- 名前空間の作成とクリーンアップ
             local ns = vim.api.nvim_create_namespace('copilot_review')
+            vim.diagnostic.reset(ns)
+
+            -- レスポンスの検証
+            if not response or response == '' then
+              vim.notify('レビュー結果が空です', vim.log.levels.WARN)
+              return
+            end
+
+            -- 診断情報の初期化
             local diagnostics = {}
+            local stats = { error = 0, warn = 0, info = 0, hint = 0 }
+
+            -- レスポンスの解析と診断情報の生成
             for line in response:gmatch('[^\r\n]+') do
               if line:find('^line=') then
-                local start_line = nil
-                local end_line = nil
-                local message = nil
+                local start_line, end_line, message = nil, nil, nil
                 local single_match, message_match = line:match('^line=(%d+): (.*)$')
+
                 if not single_match then
                   local start_match, end_match, m_message_match = line:match('^line=(%d+)-(%d+): (.*)$')
                   if start_match and end_match then
@@ -100,19 +130,57 @@ return {
                   message = message_match
                 end
 
-                if start_line and end_line then
+                if start_line and end_line and message then
+                  -- 重要度の判定
+                  local severity = vim.diagnostic.severity.INFO
+                  if message:lower():match('critical') or message:lower():match('error') then
+                    severity = vim.diagnostic.severity.ERROR
+                    stats.error = stats.error + 1
+                  elseif message:lower():match('warning') or message:lower():match('warn') then
+                    severity = vim.diagnostic.severity.WARN
+                    stats.warn = stats.warn + 1
+                  elseif message:lower():match('style') or message:lower():match('suggestion') then
+                    severity = vim.diagnostic.severity.HINT
+                    stats.hint = stats.hint + 1
+                  else
+                    stats.info = stats.info + 1
+                  end
+
+                  -- 診断情報の追加
                   table.insert(diagnostics, {
                     lnum = start_line - 1,
                     end_lnum = end_line - 1,
                     col = 0,
+                    end_col = 0,
                     message = message,
-                    severity = vim.diagnostic.severity.WARN,
+                    severity = severity,
                     source = 'Copilot Review',
                   })
                 end
               end
             end
+
+            -- 診断情報の設定
             vim.diagnostic.set(ns, source.bufnr, diagnostics)
+
+            -- レビュー結果のサマリー通知
+            vim.schedule(function()
+              local summary = string.format(
+                'コードレビュー完了:\n'
+                  .. '- エラー: %d\n'
+                  .. '- 警告: %d\n'
+                  .. '- 情報: %d\n'
+                  .. '- ヒント: %d',
+                stats.error,
+                stats.warn,
+                stats.info,
+                stats.hint
+              )
+              vim.notify(summary, vim.log.levels.INFO, {
+                title = 'Copilot Review',
+                timeout = 5000,
+              })
+            end)
           end,
         },
         Fix = {
@@ -238,7 +306,7 @@ return {
       { '<leader>cf', '<cmd>CopilotChatFixDiagnostic<cr>', desc = 'Fix Diagnostic' },
       {
         '<leader>cr',
-        '<cmd>CopilotChatReset<cr>',
+        '<cmd>CopilotChatReview<cr>',
         desc = 'Reset',
       },
       {
