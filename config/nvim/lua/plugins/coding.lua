@@ -46,22 +46,14 @@ return {
       -- 診断メッセージの表示設定を改善
       vim.diagnostic.config({
         virtual_text = {
-          -- 長い診断メッセージを複数行に分割する
+          -- 長い診断メッセージを省略する
           format = function(diagnostic)
-            local max_width = vim.api.nvim_win_get_width(0) - 10 -- ウィンドウ幅に基づく余白
+            local max_len = 50 -- 最大表示文字数
             local message = diagnostic.message
-            local lines = {}
-            while #message > max_width do
-              -- 単語単位で改行するためにスペースを探す
-              local break_pos = message:sub(1, max_width):match('.*()%s+%S+$')
-              if not break_pos then
-                break_pos = max_width
-              end
-              table.insert(lines, message:sub(1, break_pos))
-              message = message:sub(break_pos + 1)
+            if #message > max_len then
+              return message:sub(1, max_len) .. '...' -- 省略表示
             end
-            table.insert(lines, message)
-            return table.concat(lines, '\n')
+            return message
           end,
         },
         float = {
