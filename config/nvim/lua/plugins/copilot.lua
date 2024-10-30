@@ -1,21 +1,3 @@
-local prompts = {
-    -- コード関連のプロンプト
-    Explain = "次のコードがどのように動作するか説明してください。",
-    Review = "次のコードをレビューし、改善の提案をしてください。",
-    Tests = "選択されたコードがどのように動作するか説明し、ユニットテストを生成してください。",
-    Refactor = "次のコードを、より明確で読みやすいようにリファクタリングしてください。",
-    FixCode = "次のコードを修正して、意図通りに動作するようにしてください。",
-    FixError = "次のテキストのエラーを説明し、解決策を提供してください。",
-    BetterNamings = "次の変数や関数に対して、より適切な名前を提案してください。",
-    Documentation = "次のコードのドキュメントを提供してください。",
-
-    -- テキスト関連のプロンプト
-    Summarize = "次のテキストを要約してください。",
-    Spelling = "次のテキストの文法およびスペルの誤りを修正してください。",
-    Wording = "次のテキストの文法と表現を改善してください。",
-    Concise = "次のテキストを、より簡潔に書き直してください。",
-}
-
 return {
     {
         "zbirenbaum/copilot.lua",
@@ -30,7 +12,7 @@ return {
                 -- encoding を utf-8 に強制
                 encoding = "utf-8"
                 -- 元の関数を呼び出す
-                original_apply_text_edits(edits, bufnr, encoding)
+                return original_apply_text_edits(edits, bufnr, encoding)
             end
 
             require("copilot").setup({
@@ -86,56 +68,123 @@ return {
             { "nvim-lua/plenary.nvim" }, -- Neovimのユーティリティ関数を提供
         },
         build = "make tiktoken", -- MacOSやLinux向けビルド
-        opts = {
-            debug = true,        -- デバッグを有効化
-            -- Select a model:
-            -- 1: gpt-3.5-turbo-0613
-            -- 2: gpt-4-0613
-            -- 3: gpt-4o-2024-05-13
-            -- 4: gpt-4o-2024-08-06
-            -- 5: o1-preview-2024-09-12
-            -- 6: o1-mini-2024-09-12
-            -- 7: gpt-4o-mini-2024-07-18
-            -- 8: gpt-4-0125-preview
-            -- 9: claude-3.5-sonnet
-            model = "claude-3.5-sonnet",
-            auto_insert_mode = true,
-            auto_follow_cursor = true, -- 自動的に最新の結果にフォーカス
-            clear_chat_on_new_prompt = false, -- 新しいプロンプトでチャットをクリア
-            show_help = true,
-            question_header = "  " .. vim.env.USER or "User" .. " ",
-            answer_header = "  Copilot ",
-            window = {
-                width = 0.5, -- ウィンドウの幅を50%に拡大
-            },
-            selection = function(source)
-                local select = require("CopilotChat.select")
-                return select.visual(source) or select.buffer(source)
-            end,
-            mappings = {
-                submit_prompt = {
-                    normal = "<CR>", -- 通常モードでEnterキーでプロンプトを送信
-                    insert = "<CR><CR>", -- 挿入モードでEnter
+        config = function()
+            local select = require("CopilotChat.select")
+            local prompts = {
+                -- コード関連のプロンプト
+                Explain = {
+                    prompt = "/COPILOT_EXPLAIN このコードの説明を段落のテキストとして書いてください。",
+                    selection = select.visual,
                 },
-            },
-            system_prompt =
-            "Your name is Github Copilot and you are a AI assistant for developers. response language is Japanese.",
-            prompts = prompts,
-        },
-        config = function(_, opts)
+                Review = {
+                    prompt = "/COPILOT_REVIEW このコードをレビューし、改善の提案をしてください。",
+                    callback = function(response, source)
+                        local ns = vim.api.nvim_create_namespace("copilot_review")
+                        local diagnostics = {}
+                        for line in response:gmatch("[^\r\n]+") do
+                            if line:find("^line=") then
+                                local start_line = nil
+                                local end_line = nil
+                                local message = nil
+                                local single_match, message_match = line:match("^line=(%d+): (.*)$")
+                                if not single_match then
+                                    local start_match, end_match, m_message_match =
+                                        line:match("^line=(%d+)-(%d+): (.*)$")
+                                    if start_match and end_match then
+                                        start_line = tonumber(start_match)
+                                        end_line = tonumber(end_match)
+                                        message = m_message_match
+                                    end
+                                else
+                                    start_line = tonumber(single_match)
+                                    end_line = start_line
+                                    message = message_match
+                                end
+
+                                if start_line and end_line then
+                                    table.insert(diagnostics, {
+                                        lnum = start_line - 1,
+                                        end_lnum = end_line - 1,
+                                        col = 0,
+                                        message = message,
+                                        severity = vim.diagnostic.severity.WARN,
+                                        source = "Copilot Review",
+                                    })
+                                end
+                            end
+                        end
+                        vim.diagnostic.set(ns, source.bufnr, diagnostics)
+                    end,
+                },
+                Fix = {
+                    prompt = "/COPILOT_GENERATE このコードには問題があります。問題を解決するためにコードを書き直してください。",
+                },
+                Tests = {
+                    prompt = "/COPILOT_GENERATE このコードがどのように動作するか説明し、ユニットテストを生成してください。",
+                },
+                FixDiagnostic = {
+                    prompt = "このファイルの次の診断の問題を解決してください。",
+                    selection = select.diagnostics,
+                },
+                CommitStaged = {
+                    prompt =
+                    "commitizenの規約に従った変更のコミットメッセージを書いてください。タイトルは最大50文字で、メッセージは72文字で折り返します。メッセージ全体をgitcommit言語のコードブロックで囲みます。",
+                    selection = function(source)
+                        return select.gitdiff(source, true)
+                    end,
+                },
+            }
+
+            local opts = {
+                debug = true, -- デバッグを有効化
+                -- Select a model:
+                -- 1: gpt-3.5-turbo-0613
+                -- 2: gpt-4-0613
+                -- 3: gpt-4o-2024-05-13
+                -- 4: gpt-4o-2024-08-06
+                -- 5: o1-preview-2024-09-12
+                -- 6: o1-mini-2024-09-12
+                -- 7: gpt-4o-mini-2024-07-18
+                -- 8: gpt-4-0125-preview
+                -- 9: claude-3.5-sonnet
+                model = "claude-3.5-sonnet",
+                auto_insert_mode = false,
+                auto_follow_cursor = true, -- 自動的に最新の結果にフォーカス
+                clear_chat_on_new_prompt = false, -- 新しいプロンプトでチャットをクリア
+                show_help = true,
+                question_header = "  " .. vim.env.USER or "User" .. " ",
+                answer_header = "  Copilot ",
+                window = {
+                    width = 0.5, -- ウィンドウの幅を50%に拡大
+                },
+                selection = function(source)
+                    return select.visual(source) or select.buffer(source)
+                end,
+                mappings = {
+                    submit_prompt = {
+                        -- 通常モードでEnterキーでプロンプトを送信
+                        normal = "<CR>",
+                        -- insertモードでCtrl+kでプロンプトを送信
+                        insert = "<C-k>",
+                    },
+                },
+                system_prompt =
+                "Your name is Github Copilot and you are a AI assistant for developers. response language is Japanese.",
+                prompts = prompts,
+            }
             -- CopilotChatのセットアップ
             local chat = require("CopilotChat")
             chat.setup(opts)
 
             -- コマンド作成
             vim.api.nvim_create_user_command("CopilotChatVisual", function(args)
-                chat.ask(args.args, { selection = require("CopilotChat.select").visual })
+                chat.ask(args.args, { selection = select.visual })
             end, { nargs = "*", range = true })
 
             -- インラインチャットの設定
             vim.api.nvim_create_user_command("CopilotChatInline", function(args)
                 chat.ask(args.args, {
-                    selection = require("CopilotChat.select").visual,
+                    selection = select.visual,
                     window = {
                         layout = "float",
                         relative = "cursor",
