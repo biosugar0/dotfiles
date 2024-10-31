@@ -1,4 +1,24 @@
 local misc_icons = require('rc.font').misc_icons
+
+local function is_null_ls_formatter_available(bufnr)
+  local clients = vim.lsp.get_clients({ bufnr = bufnr })
+  for _, client in ipairs(clients) do
+    if client.name == 'null-ls' and client.supports_method('textDocument/formatting') then
+      return true
+    end
+  end
+  return false
+end
+-- Null-ls formatting helper functions
+local null_ls_formatting = function(bufnr)
+  -- If the null_ls formatter is available, use it.
+  vim.lsp.buf.format({
+    filter = function(client)
+      return client.name == 'null-ls'
+    end,
+    bufnr = bufnr,
+  })
+end
 return {
   -- Lua開発を強化するNeodevプラグイン
   {
@@ -61,6 +81,13 @@ return {
           border = 'rounded',
           focusable = false,
           style = 'minimal',
+          format = function(diag)
+            if diag.code then
+              return string.format('[%s](%s): %s', diag.source, diag.code, diag.message)
+            else
+              return string.format('[%s]: %s', diag.source, diag.message)
+            end
+          end,
         },
         signs = true,
         underline = true,
@@ -79,6 +106,7 @@ return {
         'yamlls', -- YAML
         'ts_ls', -- TypeScript
         'terraformls', -- Terraform
+        'typos_lsp', -- スペルチェック
       }
 
       -- 各LSPサーバーの個別設定
@@ -165,6 +193,17 @@ return {
         vim.keymap.set('n', ']d', vim.diagnostic.goto_next, bufopts)
         vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, bufopts)
 
+        if is_null_ls_formatter_available(bufnr) then
+          vim.keymap.set(
+            'n',
+            ',f',
+            null_ls_formatting,
+            { replace_keycodes = false, noremap = true, silent = true, buffer = bufnr }
+          )
+        else
+          vim.keymap.set('n', ',f', vim.lsp.buf.format, bufopts)
+        end
+
         -- LSP診断メッセージをヤンクする設定
         vim.keymap.set('n', '<leader>yd', function()
           local diagnostics = vim.diagnostic.get(0, { lnum = vim.fn.line('.') - 1 })
@@ -213,26 +252,6 @@ return {
     config = function()
       local null_ls = require('null-ls')
 
-      -- Null-ls formatting helper functions
-      local null_ls_formatting = function(bufnr)
-        -- If the null_ls formatter is available, use it.
-        vim.lsp.buf.format({
-          filter = function(client)
-            return client.name == 'null-ls'
-          end,
-          bufnr = bufnr,
-        })
-      end
-
-      local function is_null_ls_formatter_available(bufnr)
-        local clients = vim.lsp.get_active_clients({ bufnr = bufnr })
-        for _, client in ipairs(clients) do
-          if client.name == 'null-ls' and client.supports_method('textDocument/formatting') then
-            return true
-          end
-        end
-        return false
-      end
       local formatgroup = vim.api.nvim_create_augroup('LspFormatting', {})
 
       null_ls.setup({
@@ -255,7 +274,9 @@ return {
             extra_args = { '--write' }, -- 保存時に自動修正
           }),
           null_ls.builtins.formatting.shfmt,
-          null_ls.builtins.formatting.terraform_fmt,
+          null_ls.builtins.formatting.terraform_fmt.with({
+            filetypes = { 'hcl', 'tf', 'tfvars' },
+          }),
 
           -- リンター
           null_ls.builtins.diagnostics.golangci_lint,
