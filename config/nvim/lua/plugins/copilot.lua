@@ -80,12 +80,8 @@ return {
         handle:close()
 
         -- リモートHEADの参照結果からブランチ名を抽出
-        if result and result ~= '' then
-          local branch = result:match('refs/remotes/origin/(%S+)')
-          return branch or 'main' -- フォールバックは 'main'
-        else
-          return 'main' -- フォールバックとして 'main' を返す
-        end
+        local branch = result and result:match('refs/remotes/origin/(%S+)') or 'main'
+        return branch
       end
       -- 差分を解析する関数
       local function parse_diff(diff_output)
@@ -142,12 +138,10 @@ return {
         dir = dir:gsub('.git$', '')
 
         local default_branch = get_default_branch()
-        local cmd
-        if staged then
-          cmd = 'git -C ' .. dir .. ' diff --no-color --no-ext-diff --cached'
-        else
-          cmd = 'git -C ' .. dir .. ' diff --no-color --no-ext-diff ' .. default_branch .. '...HEAD'
-        end
+        local cmd = 'git -C '
+          .. dir
+          .. ' diff --no-color --no-ext-diff '
+          .. (staged and '--cached' or default_branch .. '...HEAD')
 
         local handle = io.popen(cmd)
         if not handle then
