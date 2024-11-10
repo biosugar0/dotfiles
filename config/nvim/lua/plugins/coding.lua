@@ -418,13 +418,13 @@ return {
             before = function(entry, vim_item)
               vim_item.menu = ({
                 copilot = ' ',
+                skkeleton = '[Skel]',
                 nvim_lsp = '[LSP]',
                 vsnip = '[Snippet]',
                 buffer = '[Buffer]',
                 nvim_lsp_signature_help = '[Signature]',
                 rg = '[Rg]',
                 path = '[Path]',
-                skkeleton = '[Skel]',
                 emoji = '[Emoji]',
                 cmdline = '[Cmd]',
               })[entry.source.name] or entry.source.name
