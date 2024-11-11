@@ -93,15 +93,25 @@ return {
             end
 
             ---@param dt number
+            local function get_monday(dt)
+              local day_of_week = os.date('*t', dt).wday
+              -- os.dateのwdayは1が日曜日、2が月曜日、...、7が土曜日
+              local offset = (day_of_week - 2) % 7
+              return dt - (offset * 24 * 60 * 60)
+            end
+
+            ---@param dt number
             ---@return obsidian.Path
             local function weekly_note_path(dt)
-              return client.dir / os.date('home/weekly/week-of-%Y-%m-%d.md', dt)
+              local monday = get_monday(dt)
+              return client.dir / os.date('home/weekly/week-of-%Y-%m-%d.md', monday)
             end
 
             ---@param dt number
             ---@return string
             local function weekly_alias(dt)
-              local alias = os.date('Week of %A %B %d, %Y', dt)
+              local monday = get_monday(dt)
+              local alias = os.date('W%U: %Y-%m-%d', monday)
               assert(type(alias) == 'string')
               return alias
             end
@@ -112,7 +122,7 @@ return {
             ---@type integer
             local offset_start
             if day_of_week == 'Sunday' then
-              offset_start = 1
+              offset_start = -6
             elseif day_of_week == 'Monday' then
               offset_start = 0
             elseif day_of_week == 'Tuesday' then
@@ -124,7 +134,7 @@ return {
             elseif day_of_week == 'Friday' then
               offset_start = -4
             elseif day_of_week == 'Saturday' then
-              offset_start = 2
+              offset_start = -5
             end
             assert(offset_start)
 
@@ -276,7 +286,7 @@ return {
       daily_notes = {
         date_format = '%Y-%m-%d',
         folder = 'home/daily',
-        alias_format = '%A %B %d, %Y',
+        alias_format = '%Y/%m/%d',
         template = 'home/templates/daily.md',
       },
 
