@@ -107,6 +107,8 @@ return {
         'ts_ls', -- TypeScript
         'terraformls', -- Terraform
         'typos_lsp', -- スペルチェック
+        'prismals', -- Prisma
+        'graphql', -- GraphQL
       }
 
       -- 各LSPサーバーの個別設定
