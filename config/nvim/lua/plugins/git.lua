@@ -187,7 +187,7 @@ return {
         '++processor=delta --diff-highlight --keep-plus-minus-markers',
       }
 
-      vim.g.gin_status_default_args = { '--untracked-files=all', '--ignored=traditional' }
+      vim.g.gin_status_default_args = { '--untracked-files=normal', '--ignored=traditional' }
       vim.g.gin_branch_default_args = { '--all', '--sort=-committerdate' }
       vim.g.gin_browse_default_args = {
         '--remote=origin',
