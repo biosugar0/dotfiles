@@ -287,7 +287,7 @@ return {
         date_format = '%Y-%m-%d',
         folder = 'home/daily',
         alias_format = '%Y/%m/%d',
-        template = 'home/templates/daily.md',
+        template = 'daily.md',
       },
 
       follow_url_func = function(url)
