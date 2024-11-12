@@ -233,6 +233,8 @@ return {
 
       notes_subdir = 'home',
 
+      open_app_foreground = true,
+
       picker = {
         name = picker_name,
         note_mappings = {
@@ -322,6 +324,7 @@ return {
       end,
 
       attachments = {
+        img_folder = 'files',
         img_name_func = function()
           ---@type obsidian.Client
           local client = require('obsidian').get_client()
