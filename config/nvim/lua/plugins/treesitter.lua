@@ -34,6 +34,7 @@ return {
           'tsx',
           'terraform',
           'lua',
+          'graphql',
           'gitcommit',
         },
         ignore_install = {},
