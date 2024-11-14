@@ -158,6 +158,8 @@ return {
             },
           },
         },
+        graphql = {},
+        prisma = {},
         ts_ls = {},
       }
 
