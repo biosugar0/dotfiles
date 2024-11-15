@@ -4,7 +4,7 @@ source $ZPLUG_HOME/init.zsh
 
 ## Basic Alias
 alias vi='nvim'
-alias ls='eza --icons'
+alias ls='eza'
 alias cat='bat'
 alias grep='rg'
 alias find='fd'
@@ -143,4 +143,5 @@ if [ -f ~/.zshrc.local ]; then
     source ~/.zshrc.local
 fi
 
+export PATH="/opt/homebrew/opt/curl/bin:$PATH"
 eval "$(starship init zsh)"
