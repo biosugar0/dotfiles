@@ -44,8 +44,8 @@ zplug load
 # options
 # ----------------------------------------
 export AWS_PAGER=""
-bindkey '^P' history-beginning-search-backward
-bindkey '^N' history-beginning-search-forward
+bindkey '^P' history-search-backward
+bindkey '^N' history-search-forward
 
 if [ -e /opt/homebrew/opt/zsh-completions ]; then
   fpath=(/opt/homebrew/opt/zsh-completions $fpath)
