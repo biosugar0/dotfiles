@@ -62,7 +62,7 @@ return {
   },
   {
     'CopilotC-Nvim/CopilotChat.nvim',
-    branch = 'canary',
+    branch = 'main',
     dependencies = {
       { 'zbirenbaum/copilot.lua' },
       { 'nvim-lua/plenary.nvim' },
@@ -92,8 +92,7 @@ return {
         -- 各行を解析
         for line in diff_output:gmatch('[^\r\n]+') do
           -- diffブロックの行番号を解析 (例: @@ -21,6 +21,7 @@)
-          local old_line_start, old_line_count, new_line_start, new_line_count =
-            line:match('^@@ %-(%d+),?(%d*) %+(%d+),?(%d*) @@')
+          local old_line_start, _, new_line_start, _ = line:match('^@@ %-(%d+),?(%d*) %+(%d+),?(%d*) @@')
 
           if old_line_start and new_line_start then
             -- 行番号が見つかった場合
