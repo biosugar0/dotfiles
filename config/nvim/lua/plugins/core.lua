@@ -44,6 +44,7 @@ return {
     'sgur/vim-textobj-parameter',
     dependencies = { 'kana/vim-textobj-user' },
     keys = { 'i,', 'a,' },
+    event = { 'VeryLazy' },
   },
   {
     'folke/which-key.nvim',
