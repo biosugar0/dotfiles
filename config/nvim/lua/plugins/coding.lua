@@ -66,14 +66,14 @@ return {
       -- 診断メッセージの表示設定を改善
       vim.diagnostic.config({
         virtual_text = {
-          -- 長い診断メッセージを省略する
+          -- 各診断メッセージのソース（linter名）を表示する
           format = function(diagnostic)
-            local max_len = 50 -- 最大表示文字数
-            local message = diagnostic.message
-            if #message > max_len then
-              return message:sub(1, max_len) .. '...' -- 省略表示
+            -- diagnostic.source は linter や LSP サーバーの名前
+            if diagnostic.source then
+              return string.format('[%s] %s', diagnostic.source, diagnostic.message)
+            else
+              return diagnostic.message
             end
-            return message
           end,
         },
         float = {
@@ -212,8 +212,16 @@ return {
         vim.keymap.set('n', '<leader>yd', function()
           local diagnostics = vim.diagnostic.get(0, { lnum = vim.fn.line('.') - 1 })
           if #diagnostics > 0 then
-            local message = diagnostics[1].message
-            vim.fn.setreg('+', message) -- クリップボードにコピー
+            local diagnostic = diagnostics[1]
+            local formatted_message
+            if diagnostic.source then
+              -- ソース名とメッセージを組み合わせてフォーマットする
+              formatted_message = string.format('[%s] %s', diagnostic.source, diagnostic.message)
+            else
+              formatted_message = diagnostic.message
+            end
+            -- フォーマットしたメッセージをクリップボードにコピー
+            vim.fn.setreg('+', formatted_message)
           end
         end, bufopts)
       end
