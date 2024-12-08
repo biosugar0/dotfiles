@@ -128,7 +128,7 @@ style = "red bold"  # 長時間のコマンドは赤で強調
 show_milliseconds = false  # ミリ秒単位の表示は不要ならfalse
 disabled = false
 show_notifications = true  # 長時間のコマンドに対して通知
-min_time_to_notify = 20000  # 20秒以上のコマンドに対して通知
+min_time_to_notify = 120000  # 2分以上のコマンド実行時間を通知
 
 [cobol]
 format = "via [$symbol($version )]($style)"
