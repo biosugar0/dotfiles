@@ -3,8 +3,8 @@ return {
     'vim-skk/skkeleton',
     dependencies = {
       { 'vim-denops/denops.vim' },
-      { 'yuki-yano/denops-lazy.nvim' },
       { 'skk-dev/dict', lazy = true },
+      { 'tani/vim-artemis' },
     },
     event = { 'InsertEnter' },
     keys = { '<C-j>', mode = 'i' },
@@ -37,9 +37,6 @@ return {
           vimx.fn.skkeleton.initialize()
         end,
       })
-    end,
-    config = function()
-      require('denops-lazy').load('skkeleton', { wait_load = false })
     end,
   },
 }

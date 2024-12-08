@@ -4,7 +4,7 @@ return {
   {
     'lukas-reineke/headlines.nvim',
     dependencies = { 'nvim-treesitter/nvim-treesitter' },
-    lazy = true,
+    event = { 'VeryLazy' },
     config = function()
       local bg = '#2B2B2B'
 
@@ -24,19 +24,19 @@ return {
           query = vim.treesitter.query.parse(
             'markdown',
             [[
-                (atx_heading [
-                    (atx_h1_marker)
-                    (atx_h2_marker)
-                    (atx_h3_marker)
-                    (atx_h4_marker)
-                    (atx_h5_marker)
-                    (atx_h6_marker)
-                ] @headline)
+                 (atx_heading [
+                     (atx_h1_marker)
+                     (atx_h2_marker)
+                     (atx_h3_marker)
+                     (atx_h4_marker)
+                     (atx_h5_marker)
+                     (atx_h6_marker)
+                 ] @headline)
 
-                (thematic_break) @dash
+                 (thematic_break) @dash
 
-                (fenced_code_block) @codeblock
-            ]]
+                 (fenced_code_block) @codeblock
+             ]]
           ),
         },
       })
@@ -44,7 +44,7 @@ return {
   },
   {
     'epwalsh/obsidian.nvim',
-    lazy = true,
+    event = { 'VeryLazy' },
     ft = 'markdown',
     keys = {
       { '<Leader>o', mode = { 'n', 'x' } },
