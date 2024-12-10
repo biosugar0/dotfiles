@@ -3,6 +3,7 @@ return {
     'nvim-tree/nvim-web-devicons',
     event = { 'VeryLazy' },
   },
+  { 'vim-denops/denops.vim', lazy = false },
   {
     'folke/lazy.nvim',
     cmd = { 'Lazy', 'LazyAll' },
