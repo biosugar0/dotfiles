@@ -109,7 +109,6 @@ return {
     'lambdalisue/vim-gin',
     dependencies = {
       'vim-denops/denops.vim',
-      'yuki-yano/denops-lazy.nvim',
     },
     event = 'User DenopsReady',
     cmd = {
