@@ -78,3 +78,10 @@ if fn.executable('osascript') == 1 then
     end,
   })
 end
+
+-- オートコメントを無効にする
+api.nvim_create_autocmd('FileType', {
+  group = vim.api.nvim_create_augroup('turn_off_auto_commenting', {}),
+  pattern = '*',
+  command = [[setlocal fo-=cro]],
+})
