@@ -10,30 +10,9 @@ return {
       { 'MeanderingProgrammer/render-markdown.nvim', ft = { 'markdown', 'codecompanion' } },
     },
     keys = {
-      {
-        '<leader>cc',
-        '<cmd>CodeCompanionActions<cr>',
-        mode = { 'n', 'v' },
-        noremap = true,
-        silent = true,
-        desc = 'CodeCompanion actions',
-      },
-      {
-        '<leader>ca',
-        '<cmd>CodeCompanionChat Toggle<cr>',
-        mode = { 'n', 'v' },
-        noremap = true,
-        silent = true,
-        desc = 'CodeCompanion chat',
-      },
-      {
-        '<leader>cd',
-        '<cmd>CodeCompanionChat Add<cr>',
-        mode = 'v',
-        noremap = true,
-        silent = true,
-        desc = 'CodeCompanion add to chat',
-      },
+      { 'cc', 'CodeCompanion', mode = 'ca' },
+      { 'ccc', 'CodeCompanionChat', mode = 'ca' },
+      { 'cca', 'CodeCompanionActions', mode = 'ca' },
     },
     opts = {
       adapters = {
