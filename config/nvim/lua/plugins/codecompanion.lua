@@ -7,14 +7,30 @@ return {
       'nvim-treesitter/nvim-treesitter',
       'nvim-telescope/telescope.nvim',
       'zbirenbaum/copilot.lua',
+      {
+        'echasnovski/mini.diff',
+        config = function()
+          local diff = require('mini.diff')
+          diff.setup({
+            -- Disabled by default
+            source = diff.gen_source.none(),
+          })
+        end,
+      },
       { 'MeanderingProgrammer/render-markdown.nvim', ft = { 'markdown', 'codecompanion' } },
     },
+    -- Buffer commands for CodeCompanion plugin
     keys = {
-      { 'cc', 'CodeCompanion', mode = 'ca' },
-      { 'ccc', 'CodeCompanionChat', mode = 'ca' },
-      { 'cca', 'CodeCompanionActions', mode = 'ca' },
+      { 'cc', '<cmd>CodeCompanion<cr>', mode = { 'n', 'v' } }, -- Open companion
+      { 'ccc', '<cmd>CodeCompanionChat<cr>', mode = { 'n', 'v' } }, -- Start chat
+      { 'cca', '<cmd>CodeCompanionActions<cr>', mode = { 'n', 'v' } }, -- List actions
     },
     opts = {
+      display = {
+        diff = {
+          provider = 'mini_diff',
+        },
+      },
       adapters = {
         copilot = function()
           return require('codecompanion.adapters').extend('copilot', {
