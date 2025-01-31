@@ -18,15 +18,77 @@ return {
       },
       { 'MeanderingProgrammer/render-markdown.nvim', ft = { 'markdown', 'codecompanion' } },
     },
-    -- Buffer commands for CodeCompanion plugin
     keys = {
-      { 'cc', '<cmd>CodeCompanion<cr>', mode = 'ca' },
+      { 'cc', 'CodeCompanion', mode = 'ca' },
       { 'ccc', '<cmd>CodeCompanionChat Toggle<cr>', mode = { 'n', 'v' } },
       { 'cca', '<cmd>CodeCompanionActions<cr>', mode = { 'n', 'v' } },
     },
     opts = {
+      adapters = {
+        copilot = function()
+          return require('codecompanion.adapters').extend('copilot', {
+            schema = {
+              model = {
+                default = 'claude-3.5-sonnet',
+              },
+            },
+          })
+        end,
+      },
+
+      strategies = {
+        inline = {
+          adapter = 'copilot',
+        },
+        agent = {
+          adapter = 'copilot',
+        },
+        chat = {
+          adapter = 'copilot',
+          roles = {
+            llm = '  ',
+            user = '  ',
+          },
+          agents = {
+            ['my_agent'] = {
+              description = 'A custom agent combining tools',
+              system_prompt = 'use weather_tool',
+              tools = {
+                'weather_tool',
+              },
+            },
+            tools = {
+              ['weather_tool'] = {
+                description = "Get today's Tokyo weather",
+                callback = vim.fn.stdpath('config') .. '/lua/plugins/codecompanion/weather_tool.lua',
+              },
+            },
+          },
+        },
+      },
+      display = {
+        diff = {
+          provider = 'mini_diff', -- mini.diff を使用
+        },
+        action_palette = {
+          provider = 'telescope',
+          opts = {
+            show_default_actions = true,
+          },
+          show_default_prompt_library = true,
+        },
+        chat = {
+          show_settings = true,
+          show_keys = true,
+          show_reference_info = true,
+          show_system_messages = true,
+        },
+      },
       opts = {
-        system_prompt = function(opts)
+        log_level = 'DEBUG',
+        language = 'Japanese',
+        send_code = true,
+        system_prompt = function(_)
           return [[
 あなたは "CodeCompanion" というAIプログラミングアシスタントです。
 現在、Neovimのテキストエディタに統合されており、ユーザーがより効率的に作業できるよう支援します。
@@ -59,52 +121,8 @@ return {
 2. コードを1つのコードブロックで出力する（適切な言語名を付与）
 3. ユーザーの次のアクションを提案する
 4. 各ターンごとに1つの応答のみを返す
-        ]]
+          ]]
         end,
-      },
-      display = {
-        diff = {
-          provider = 'mini_diff',
-        },
-        action_palette = {
-          provider = 'telescope',
-          opts = {
-            show_default_actions = true,
-          },
-          show_default_prompt_library = true,
-        },
-        chat = {
-          show_settings = true,
-          show_keys = true,
-          show_reference_info = true,
-          show_system_messages = true,
-        },
-      },
-      adapters = {
-        copilot = function()
-          return require('codecompanion.adapters').extend('copilot', {
-            schema = {
-              model = {
-                default = 'claude-3.5-sonnet',
-              },
-            },
-          })
-        end,
-      },
-      strategies = {
-        inline = {
-          adapter = 'copilot',
-        },
-        agent = {
-          adapter = 'copilot',
-        },
-        chat = {
-          adapter = 'copilot',
-          roles = {
-            llm = '  ',
-            user = '  ',
-          },
-        },
       },
     },
     config = function(_, opts)
