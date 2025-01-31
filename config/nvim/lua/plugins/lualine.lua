@@ -10,6 +10,7 @@ return {
 
       -- `nvim-notify` の設定
       require('notify').setup({
+        merge_duplicates = true,
         -- 通知レベル（エラーレベル以上の通知のみ表示）
         level = 'info', -- "info", "warn", "error", "debug" などが選択可能
 
@@ -85,17 +86,47 @@ return {
     end,
   },
   {
-    'nvim-lualine/lualine.nvim', -- Specify the lualine plugin
+    'nvim-lualine/lualine.nvim',
     dependencies = {
       'kyazdani42/nvim-web-devicons',
     },
     event = 'VimEnter',
     config = function()
-      -- The lualine configuration, migrated from your previous setup
+      -- CodeCompanion のステータス表示用コンポーネント
+      local codecompanion_status = {
+        function()
+          if vim.g.codecompanion_processing == true then
+            local spinners = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' }
+            local index = vim.g.codecompanion_spinner or 1
+            vim.g.codecompanion_spinner = (index % #spinners) + 1
+            return spinners[index] .. '   ' -- AI リクエスト中の表示
+          else
+            return '  ' -- 待機中の表示
+          end
+        end,
+        color = { fg = 'yellow' },
+      }
+
+      -- CodeCompanion イベントをキャッチしてステータスを更新
+      local group = vim.api.nvim_create_augroup('CodeCompanionLualine', { clear = true })
+      vim.api.nvim_create_autocmd('User', {
+        pattern = 'CodeCompanionRequest*',
+        group = group,
+        callback = function(event)
+          if event.match == 'CodeCompanionRequestStarted' then
+            vim.g.codecompanion_processing = true
+          elseif event.match == 'CodeCompanionRequestFinished' then
+            vim.g.codecompanion_processing = false
+          end
+          vim.cmd('redrawstatus')
+        end,
+      })
+
+      -- lualine 設定
       require('lualine').setup({
         options = {
           icons_enabled = true,
-          theme = 'nightfly', -- Set your theme
+          theme = 'nightfly',
           component_separators = { left = '|', right = '|' },
           section_separators = { left = '', right = '' },
           disabled_filetypes = {},
@@ -119,7 +150,7 @@ return {
               },
             },
           },
-          lualine_x = { 'filetype', 'encoding' },
+          lualine_x = { 'filetype', 'encoding', codecompanion_status },
           lualine_y = {
             {
               'diagnostics',
