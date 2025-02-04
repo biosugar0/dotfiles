@@ -84,6 +84,46 @@ return {
           show_system_messages = true,
         },
       },
+      prompt_library = {
+        ['Multi Translate'] = {
+          strategy = 'chat',
+          description = 'Create Translated Text',
+          opts = {
+            short_name = 'tr',
+            auto_submit = true,
+            is_slash_cmd = true,
+            is_default = true,
+            adapter = {
+              name = 'copilot',
+              model = 'claude-3.5-sonnet',
+            },
+          },
+          prompts = {
+            {
+              role = 'system',
+              content = function(_)
+                return [[
+You are a bilingual translation expert specialized in Japanese-English translation.
+Your primary tasks are:
+- Automatically detect the input language
+- Translate Japanese to English or other languages to Japanese
+- Maintain high accuracy and natural expression in both languages
+- Preserve the original tone and context
+- Add cultural explanations when necessary
+- If the input text is too large, split it into smaller sections and translate each section without omission or summary
+                ]]
+              end,
+            },
+            {
+              role = 'user',
+              content = function(context)
+                local text = require('codecompanion.helpers.actions').get_code(context.start_line, context.end_line)
+                return 'Please translate the following text:\n```\n' .. text .. '\n```'
+              end,
+            },
+          },
+        },
+      },
       opts = {
         log_level = 'DEBUG',
         language = 'Japanese',
