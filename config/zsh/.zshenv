@@ -66,3 +66,4 @@ unsetopt list_types
 export DOCKER_BUILDKIT=1
 
 export NVM_DIR="$HOME/.nvm"
+export WEZTERM_CONFIG_FILE="$XDG_CONFIG_HOME/wezterm/wezterm.lua"
