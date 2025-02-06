@@ -219,7 +219,7 @@ return {
         },
         Review = {
           selection = select.buffer,
-          prompt = '> #git_diff\n\n> #buffer\n\n>#files\n\n>#buffer\n\nこのコードの変更をレビューしてください。',
+          prompt = '> #git_diff\n\n>#files\n\n>#buffer\n\nこのコードの変更をレビューしてください。',
           system_prompt = [[
 与えられたbufferのコードのdiff内容をレビューし、特に読みやすさと保守性に焦点を当ててください。
 以下に関連する問題を特定してください：
