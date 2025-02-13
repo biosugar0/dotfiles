@@ -299,7 +299,7 @@ line=11-15: ネストが過剰で、コードの追跡が困難です。\nネス
 
       local opts = {
         debug = true,
-        model = 'gemini-2.0-flash-001',
+        model = 'claude-3.5-sonnet',
         chat_autocomplete = true,
         auto_insert_mode = false,
         auto_follow_cursor = true,
