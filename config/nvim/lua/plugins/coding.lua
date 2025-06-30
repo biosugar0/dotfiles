@@ -46,9 +46,9 @@ return {
       { 'folke/trouble.nvim' },
     },
     config = function()
-      local lspconfig = require('lspconfig')
-      local mason_lspconfig = require('mason-lspconfig')
-
+      -- Neodevのセットアップ（最初に行う必要がある）
+      require('neodev').setup()
+      
       -- Capabilitiesの設定
       local capabilities = vim.lsp.protocol.make_client_capabilities()
       capabilities.textDocument.completion.completionItem.snippetSupport = true
@@ -61,8 +61,6 @@ return {
       }
       capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
 
-      -- Neodevのセットアップ
-      require('neodev').setup()
       -- 診断メッセージの表示設定を改善
       vim.diagnostic.config({
         virtual_text = {
@@ -96,72 +94,6 @@ return {
       vim.keymap.set('n', '<leader>e', function()
         vim.diagnostic.open_float(nil, { focusable = false, border = 'rounded' })
       end, { noremap = true, silent = true })
-
-      -- LSPサーバーの設定
-      local servers = {
-        'bashls', -- Bash
-        'gopls', -- Go
-        'lua_ls', -- Lua
-        'pyright', -- Python
-        'yamlls', -- YAML
-        'ts_ls', -- TypeScript
-        'terraformls', -- Terraform
-        'typos_lsp', -- スペルチェック
-        'prismals', -- Prisma
-        'graphql', -- GraphQL
-      }
-
-      -- 各LSPサーバーの個別設定
-      local settings = {
-        yamlls = {
-          yaml = {
-            keyOrdering = false,
-            schemas = require('schemastore').yaml.schemas(),
-          },
-        },
-        gopls = {
-          gopls = {
-            usePlaceholders = true,
-            completeUnimported = true,
-            staticcheck = true,
-            analyses = {
-              unusedparams = true,
-              unreachable = true,
-            },
-          },
-        },
-        pyright = {
-          python = {
-            analysis = {
-              autoSearchPaths = true,
-              useLibraryCodeForTypes = true,
-              diagnosticMode = 'workspace',
-              typeCheckingMode = 'off',
-            },
-          },
-        },
-        lua_ls = {
-          Lua = {
-            runtime = {
-              version = 'LuaJIT',
-              path = vim.split(package.path, ';'),
-            },
-            diagnostics = {
-              globals = { 'vim' },
-            },
-            workspace = {
-              library = vim.api.nvim_get_runtime_file('', true),
-              checkThirdParty = false,
-            },
-            telemetry = {
-              enable = false,
-            },
-          },
-        },
-        graphql = {},
-        prisma = {},
-        ts_ls = {},
-      }
 
       -- LSPハンドラーの設定（ボーダー付き）
       local border = {
@@ -226,22 +158,130 @@ return {
         end, bufopts)
       end
 
-      -- Mason-lspconfigのセットアップ
-      mason_lspconfig.setup({
-        ensure_installed = servers,
-        automatic_installation = true,
+      -- 新しいvim.lsp.config() APIを使用してLSPサーバーを設定
+      vim.lsp.config('lua_ls', {
+        on_attach = on_attach,
+        capabilities = capabilities,
+        handlers = handlers,
+        settings = {
+          Lua = {
+            runtime = {
+              version = 'LuaJIT',
+              path = vim.split(package.path, ';'),
+            },
+            diagnostics = {
+              globals = { 'vim' },
+            },
+            workspace = {
+              library = vim.api.nvim_get_runtime_file('', true),
+              checkThirdParty = false,
+            },
+            telemetry = {
+              enable = false,
+            },
+          },
+        },
       })
 
-      -- LSPサーバーのセットアップ
-      for _, server in ipairs(servers) do
-        local opts = {
-          on_attach = on_attach,
-          capabilities = capabilities,
-          settings = settings[server],
-          handlers = handlers,
-        }
-        lspconfig[server].setup(opts)
-      end
+      vim.lsp.config('gopls', {
+        on_attach = on_attach,
+        capabilities = capabilities,
+        handlers = handlers,
+        settings = {
+          gopls = {
+            usePlaceholders = true,
+            completeUnimported = true,
+            staticcheck = true,
+            analyses = {
+              unusedparams = true,
+              unreachable = true,
+            },
+          },
+        },
+      })
+
+      vim.lsp.config('yamlls', {
+        on_attach = on_attach,
+        capabilities = capabilities,
+        handlers = handlers,
+        settings = {
+          yaml = {
+            keyOrdering = false,
+            schemas = require('schemastore').yaml.schemas(),
+          },
+        },
+      })
+
+      vim.lsp.config('pyright', {
+        on_attach = on_attach,
+        capabilities = capabilities,
+        handlers = handlers,
+        settings = {
+          python = {
+            analysis = {
+              autoSearchPaths = true,
+              useLibraryCodeForTypes = true,
+              diagnosticMode = 'workspace',
+              typeCheckingMode = 'off',
+            },
+          },
+        },
+      })
+
+      vim.lsp.config('ts_ls', {
+        on_attach = on_attach,
+        capabilities = capabilities,
+        handlers = handlers,
+      })
+
+      vim.lsp.config('bashls', {
+        on_attach = on_attach,
+        capabilities = capabilities,
+        handlers = handlers,
+      })
+
+      vim.lsp.config('terraformls', {
+        on_attach = on_attach,
+        capabilities = capabilities,
+        handlers = handlers,
+      })
+
+      vim.lsp.config('typos_lsp', {
+        on_attach = on_attach,
+        capabilities = capabilities,
+        handlers = handlers,
+      })
+
+      vim.lsp.config('prismals', {
+        on_attach = on_attach,
+        capabilities = capabilities,
+        handlers = handlers,
+      })
+
+      vim.lsp.config('graphql', {
+        on_attach = on_attach,
+        capabilities = capabilities,
+        handlers = handlers,
+      })
+
+      -- Mason setup
+      require('mason').setup()
+      
+      -- Mason-lspconfig setup (新しいAPI)
+      require('mason-lspconfig').setup({
+        ensure_installed = {
+          'bashls',
+          'gopls',
+          'lua_ls',
+          'pyright',
+          'yamlls',
+          'ts_ls',
+          'terraformls',
+          'typos_lsp',
+          'prismals',
+          'graphql',
+        },
+      })
     end,
   },
   -- MasonによるLSPサーバー管理
