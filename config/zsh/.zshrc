@@ -11,6 +11,7 @@ alias find='fd'
 alias sed='gsed'
 alias time='gtime'
 alias la='ls -la'
+alias awk='gawk'
 
 # ----------------------------------------
 # プラグイン
