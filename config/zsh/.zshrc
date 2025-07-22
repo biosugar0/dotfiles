@@ -12,6 +12,7 @@ alias sed='gsed'
 alias time='gtime'
 alias la='ls -la'
 alias awk='gawk'
+alias claude='cage --preset claude-code -- claude --dangerously-skip-permissions'
 
 # ----------------------------------------
 # プラグイン

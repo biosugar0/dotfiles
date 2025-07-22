@@ -48,7 +48,7 @@ return {
     config = function()
       -- Neodevのセットアップ（最初に行う必要がある）
       require('neodev').setup()
-      
+
       -- Capabilitiesの設定
       local capabilities = vim.lsp.protocol.make_client_capabilities()
       capabilities.textDocument.completion.completionItem.snippetSupport = true
@@ -266,8 +266,8 @@ return {
 
       -- Mason setup
       require('mason').setup()
-      
-      -- Mason-lspconfig setup (新しいAPI)
+
+      -- Mason-lspconfig setup
       require('mason-lspconfig').setup({
         ensure_installed = {
           'bashls',
@@ -374,6 +374,15 @@ return {
       { 'hrsh7th/cmp-cmdline' },
       { 'hrsh7th/cmp-emoji' },
       { 'hrsh7th/cmp-vsnip' },
+      {
+        'biosugar0/cmp-claudecode',
+        enabled = {
+          custom = function()
+            local bufname = vim.fn.bufname()
+            return bufname:match('%.editprompt%-') ~= nil
+          end,
+        },
+      },
       { 'onsails/lspkind.nvim' },
       { 'nvim-tree/nvim-web-devicons' },
       { 'hrsh7th/vim-vsnip' }, -- Snippet engine
@@ -391,6 +400,8 @@ return {
       require('copilot_cmp').setup()
 
       local sources = {
+        { name = 'claude_slash', priority = 900 },
+        { name = 'claude_at', priority = 900 },
         { name = 'copilot' },
         { name = 'skkeleton' },
         { name = 'nvim_lsp' },
@@ -479,6 +490,8 @@ return {
                 path = '[Path]',
                 emoji = '[Emoji]',
                 cmdline = '[Cmd]',
+                claude_slash = '[Claude /]',
+                claude_at = '[Claude @]',
               })[entry.source.name] or entry.source.name
               return vim_item
             end,
@@ -532,8 +545,6 @@ return {
           end,
         },
       })
-
-      -- Insert '(' after confirming a function or method
       cmp.event:on('confirm_done', function(evt)
         local kind = evt.entry:get_kind()
         if kind == cmp.lsp.CompletionItemKind.Function or kind == cmp.lsp.CompletionItemKind.Method then

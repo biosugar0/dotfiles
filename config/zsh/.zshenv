@@ -4,6 +4,9 @@ export XDG_CACHE_HOME=${HOME}/.cache
 export XDG_DATA_HOME=${HOME}/.local/share
 export XDG_STATE_HOME=${HOME}/.local/state
 
+# Make PATH entries unique
+typeset -U PATH path
+
 # path
 export PATH=${HOME}/.local/bin:$PATH
 export PATH="/usr/local/sbin:$PATH"
@@ -68,3 +71,4 @@ export DOCKER_BUILDKIT=1
 export NVM_DIR="$HOME/.nvm"
 export WEZTERM_CONFIG_FILE="$XDG_CONFIG_HOME/wezterm/wezterm.lua"
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+export CLAUDE_CONFIG_DIR="$XDG_CONFIG_HOME/claude"
