@@ -2,7 +2,7 @@ return {
   {
     'zbirenbaum/copilot.lua',
     cmd = 'Copilot',
-    event = 'InsertEnter',
+    event = 'VeryLazy',
     config = function()
       -- 元の vim.lsp.util.apply_text_edits をラップ
       local original_apply_text_edits = vim.lsp.util.apply_text_edits
@@ -15,6 +15,7 @@ return {
         return original_apply_text_edits(edits, bufnr, encoding)
       end
 
+      -- まずsetupを実行
       require('copilot').setup({
         suggestion = {
           enabled = true,
@@ -56,8 +57,12 @@ return {
         server_opts_overrides = {},
       })
 
-      -- 自動サインイン
-      require('copilot.auth').signin()
+      -- setupが完了してから自動サインインを実行
+      vim.defer_fn(function()
+        pcall(function()
+          require('copilot.auth').signin()
+        end)
+      end, 500) -- 500ms遅延
     end,
   },
 }
