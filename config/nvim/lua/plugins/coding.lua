@@ -376,11 +376,12 @@ return {
       { 'hrsh7th/cmp-vsnip' },
       {
         'biosugar0/cmp-claudecode',
-        enabled = {
-          custom = function()
-            local bufname = vim.fn.bufname()
-            return bufname:match('%.editprompt%-') ~= nil
-          end,
+        opts = {
+          enabled = {
+            custom = function()
+              return vim.env.EDITPROMPT == '1'
+            end,
+          },
         },
       },
       { 'onsails/lspkind.nvim' },
