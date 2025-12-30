@@ -25,8 +25,10 @@ ide/
 
 # Plugin cache/state
 plugins/cache/
+plugins/install-counts-cache.json
 plugins/installed_plugins.json
 plugins/marketplaces/
+plugins/repos/
 plugins/*.tar.gz
 
 # Temporary/Generated
