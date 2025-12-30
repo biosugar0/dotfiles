@@ -1,0 +1,37 @@
+[user]
+	name = Yuto Kimura
+	email = biosugar0@gmail.com
+[mergetool]
+	keepBackup = false
+[fetch]
+	prune = true
+[push]
+	default = current
+	autoSetupRemote = true
+[pull]
+	rebase = false
+[commit]
+	verbose = true
+[status]
+	showUntrackedFiles = all
+[diff]
+	algorithm = histogram
+	colorMoved = dimmed-zebra
+	colorMovedWS = allow-indentation-change
+[color "status"]
+	added     = green
+	changed   = red
+	untracked = yellow
+	unmerged  = magenta
+[init]
+	defaultBranch = main
+[credential "https://github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[gtr "ai"]
+	default = claude
+[gtr "editor"]
+	default = nvim

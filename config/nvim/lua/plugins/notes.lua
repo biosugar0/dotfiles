@@ -1,0 +1,529 @@
+local picker_name = 'telescope.nvim'
+
+return {
+  {
+    'lukas-reineke/headlines.nvim',
+    dependencies = { 'nvim-treesitter/nvim-treesitter' },
+    event = { 'VeryLazy' },
+    config = function()
+      local bg = '#2B2B2B'
+
+      vim.api.nvim_set_hl(0, 'Headline1', { fg = '#33ccff', bg = bg })
+      vim.api.nvim_set_hl(0, 'Headline2', { fg = '#00bfff', bg = bg })
+      vim.api.nvim_set_hl(0, 'Headline3', { fg = '#0099cc', bg = bg })
+      vim.api.nvim_set_hl(0, 'CodeBlock', { bg = bg })
+      vim.api.nvim_set_hl(0, 'Dash', { fg = '#D19A66', bold = true })
+
+      require('headlines').setup({
+        markdown = {
+          headline_highlights = { 'Headline1', 'Headline2', 'Headline3' },
+          bullet_highlights = { 'Headline1', 'Headline2', 'Headline3' },
+          bullets = { '❯', '❯', '❯', '❯' },
+          dash_string = '⎯',
+          fat_headlines = false,
+          query = vim.treesitter.query.parse(
+            'markdown',
+            [[
+                 (atx_heading [
+                     (atx_h1_marker)
+                     (atx_h2_marker)
+                     (atx_h3_marker)
+                     (atx_h4_marker)
+                     (atx_h5_marker)
+                     (atx_h6_marker)
+                 ] @headline)
+
+                 (thematic_break) @dash
+
+                 (fenced_code_block) @codeblock
+             ]]
+          ),
+        },
+      })
+    end,
+  },
+  {
+    'epwalsh/obsidian.nvim',
+    event = { 'VeryLazy' },
+    ft = 'markdown',
+    keys = {
+      { '<Leader>o', mode = { 'n', 'x' } },
+    },
+    dependencies = {
+      'nvim-lua/plenary.nvim',
+      'nvim-cmp',
+      'headlines.nvim',
+      'folke/which-key.nvim',
+      'echasnovski/mini.icons',
+      picker_name,
+    },
+    config = function(_, opts)
+      -- Setup obsidian.nvim
+      require('obsidian').setup(opts)
+
+      -- Create which-key mappings for common commands.
+      local wk = require('which-key')
+
+      wk.add({
+        { '<leader>o', group = 'Obsidian' }, -- グループの定義
+        { '<leader>oo', '<cmd>ObsidianOpen<cr>', desc = 'Open note' },
+        { '<leader>od', '<cmd>ObsidianDailies -10 0<cr>', desc = 'Daily notes' },
+        { '<leader>op', '<cmd>ObsidianPasteImg<cr>', desc = 'Paste image' },
+        { '<leader>oq', '<cmd>ObsidianQuickSwitch<cr>', desc = 'Quick switch' },
+        { '<leader>os', '<cmd>ObsidianSearch<cr>', desc = 'Search' },
+        { '<leader>ot', '<cmd>ObsidianTags<cr>', desc = 'Tags' },
+        { '<leader>ol', '<cmd>ObsidianLinks<cr>', desc = 'Links' },
+        { '<leader>ob', '<cmd>ObsidianBacklinks<cr>', desc = 'Backlinks' },
+        { '<leader>om', '<cmd>ObsidianTemplate<cr>', desc = 'Template' },
+        { '<leader>on', '<cmd>ObsidianQuickSwitch nav<cr>', desc = 'Nav' },
+        { '<leader>or', '<cmd>ObsidianRename<cr>', desc = 'Rename' },
+        { '<leader>oc', '<cmd>ObsidianTOC<cr>', desc = 'Contents (TOC)' },
+        {
+          '<leader>ow',
+          function() -- Weekliesのカスタム関数
+            local Note = require('obsidian.note')
+            ---@type obsidian.Client
+            local client = require('obsidian').get_client()
+            assert(client)
+
+            local picker = client:picker()
+            if not picker then
+              client.log.err('No picker configured')
+              return
+            end
+
+            ---@param dt number
+            local function get_monday(dt)
+              local day_of_week = os.date('*t', dt).wday
+              -- os.dateのwdayは1が日曜日、2が月曜日、...、7が土曜日
+              local offset = (day_of_week - 2) % 7
+              return dt - (offset * 24 * 60 * 60)
+            end
+
+            ---@param dt number
+            ---@return obsidian.Path
+            local function weekly_note_path(dt)
+              local monday = get_monday(dt)
+              return client.dir / os.date('home/weekly/week-of-%Y-%m-%d.md', monday)
+            end
+
+            ---@param dt number
+            ---@return string
+            local function weekly_alias(dt)
+              local monday = get_monday(dt)
+              local alias = os.date('W%U: %Y-%m-%d', monday)
+              assert(type(alias) == 'string')
+              return alias
+            end
+
+            local day_of_week = os.date('%A')
+            assert(type(day_of_week) == 'string')
+
+            ---@type integer
+            local offset_start
+            if day_of_week == 'Sunday' then
+              offset_start = -6
+            elseif day_of_week == 'Monday' then
+              offset_start = 0
+            elseif day_of_week == 'Tuesday' then
+              offset_start = -1
+            elseif day_of_week == 'Wednesday' then
+              offset_start = -2
+            elseif day_of_week == 'Thursday' then
+              offset_start = -3
+            elseif day_of_week == 'Friday' then
+              offset_start = -4
+            elseif day_of_week == 'Saturday' then
+              offset_start = -5
+            end
+            assert(offset_start)
+
+            local current_week_dt = os.time() + (offset_start * 3600 * 24)
+            ---@type obsidian.PickerEntry
+            local weeklies = {}
+            for week_offset = 1, -2, -1 do
+              local week_dt = current_week_dt + (week_offset * 3600 * 24 * 7)
+              local week_alias = weekly_alias(week_dt)
+              local week_display = week_alias
+              local path = weekly_note_path(week_dt)
+
+              if week_offset == 0 then
+                week_display = week_display .. ' @current'
+              elseif week_offset == 1 then
+                week_display = week_display .. ' @next'
+              elseif week_offset == -1 then
+                week_display = week_display .. ' @last'
+              end
+
+              if not path:is_file() then
+                week_display = week_display .. ' ➡️ create'
+              end
+
+              weeklies[#weeklies + 1] = {
+                value = week_dt,
+                display = week_display,
+                ordinal = week_display,
+                filename = tostring(path),
+              }
+            end
+
+            picker:pick(weeklies, {
+              prompt_title = 'Weeklies',
+              callback = function(dt)
+                local path = weekly_note_path(dt)
+                ---@type obsidian.Note
+                local note
+                if path:is_file() then
+                  note = Note.from_file(path)
+                else
+                  note = client:create_note({
+                    id = path.name,
+                    dir = path:parent(),
+                    title = weekly_alias(dt),
+                    tags = { 'weekly-notes' },
+                  })
+                end
+                client:open_note(note)
+              end,
+            })
+          end,
+          desc = 'Weeklies',
+        },
+      })
+
+      wk.add({
+        {
+          '<leader>oe',
+          function()
+            local title = vim.fn.input({ prompt = 'Enter title (optional): ' })
+            vim.cmd('ObsidianExtractNote ' .. title)
+          end,
+          desc = 'Extract text into new note',
+        },
+        {
+          '<leader>ol',
+          function()
+            vim.cmd('ObsidianLink')
+          end,
+          desc = 'Link text to an existing note',
+        },
+        {
+          '<leader>on',
+          function()
+            vim.cmd('ObsidianLinkNew')
+          end,
+          desc = 'Link text to a new note',
+        },
+        {
+          '<leader>ot',
+          function()
+            vim.cmd('ObsidianTags')
+          end,
+          desc = 'Tags',
+        },
+      }, { mode = 'v' })
+    end,
+    opts = {
+      workspaces = {
+        {
+          name = 'memo',
+          path = vim.fs.normalize('~/Library/Mobile Documents/iCloud~md~obsidian/Documents/memo'),
+        },
+      },
+
+      notes_subdir = 'home',
+
+      open_app_foreground = true,
+
+      picker = {
+        name = picker_name,
+        note_mappings = {
+          new = '<C-n>',
+        },
+      },
+
+      sort_by = 'modified',
+      sort_reversed = true,
+
+      open_notes_in = 'vsplit',
+
+      log_level = vim.log.levels.INFO,
+
+      -- disable_frontmatter = true,
+
+      wiki_link_func = 'prepend_note_id',
+      -- wiki_link_func = "use_alias_only",
+      -- wiki_link_func = "prepend_note_path",
+      -- wiki_link_func = "use_path_only",
+
+      note_id_func = function(title)
+        -- Create note IDs in a Zettelkasten format with a timestamp and a suffix.
+        local suffix = ''
+        if title ~= nil then
+          -- If title is given, transform it into valid file name.
+          suffix = title:gsub(' ', '-'):gsub('[^A-Za-z0-9-]', ''):lower()
+        else
+          -- If title is nil, just add 4 random uppercase letters to the suffix.
+          for _ = 1, 4 do
+            suffix = suffix .. string.char(math.random(65, 90))
+          end
+        end
+        return tostring(os.time()) .. '-' .. suffix
+      end,
+
+      new_notes_location = 'notes_subdir',
+
+      completion = {
+        nvim_cmp = true,
+        min_chars = 2,
+      },
+
+      templates = {
+        folder = 'home/templates',
+        date_format = '%Y-%m-%d-%a',
+        time_format = '%H:%M',
+        substitutions = {},
+      },
+
+      daily_notes = {
+        date_format = '%Y-%m-%d',
+        folder = 'home/daily',
+        alias_format = '%Y/%m/%d',
+        template = 'daily.md',
+      },
+
+      follow_url_func = function(url)
+        -- Open the URL in the default web browser.
+        vim.fn.jobstart({ 'open', url }) -- Mac OS
+        -- vim.fn.jobstart({"xdg-open", url})  -- linux
+      end,
+
+      follow_img_func = function(img)
+        -- Open the image in the default web browser.
+        vim.fn.jobstart({ 'qlmanage', '-p', img })
+        -- vim.fn.jobstart({"xdg-open", url})  -- linux
+      end,
+
+      ---@param note obsidian.Note
+      note_frontmatter_func = function(note)
+        -- Add the title of the note as an alias.
+        if note.title then
+          note:add_alias(note.title)
+        end
+
+        local out = { id = note.id, aliases = note.aliases, tags = note.tags }
+
+        -- `note.metadata` contains any manually added fields in the frontmatter.
+        -- So here we just make sure those fields are kept in the frontmatter.
+        if note.metadata ~= nil and vim.tbl_count(note.metadata) > 0 then
+          for k, v in pairs(note.metadata) do
+            out[k] = v
+          end
+        end
+        return out
+      end,
+
+      attachments = {
+        img_folder = 'files',
+        img_name_func = function()
+          ---@type obsidian.Client
+          local client = require('obsidian').get_client()
+
+          local note = client:current_note()
+          if note then
+            return string.format('%s-', note.id)
+          else
+            return string.format('%s-', os.time())
+          end
+        end,
+      },
+
+      callbacks = {
+        -- Runs at the end of `require("obsidian").setup()`.
+        ---@param client obsidian.Client
+        ---@diagnostic disable-next-line: unused-local
+        post_setup = function(client) end,
+
+        -- Runs anytime you enter the buffer for a note.
+        ---@param client obsidian.Client
+        ---@param note obsidian.Note
+        ---@diagnostic disable-next-line: unused-local
+        enter_note = function(client, note)
+          if note.path.stem == 'nav' then
+            vim.opt.wrap = false
+          end
+        end,
+
+        -- Runs anytime you leave the buffer for a note.
+        ---@param client obsidian.Client
+        ---@param note obsidian.Note
+        ---@diagnostic disable-next-line: unused-local
+        leave_note = function(client, note)
+          vim.api.nvim_buf_call(note.bufnr or 0, function()
+            vim.cmd('silent w')
+          end)
+        end,
+
+        -- Runs right before writing the buffer for a note.
+        ---@param client obsidian.Client
+        ---@param note obsidian.Note
+        ---@diagnostic disable-next-line: unused-local
+        pre_write_note = function(client, note)
+          -- note:add_field("modified", os.date())
+        end,
+
+        -- Runs anytime the workspace is set/changed.
+        ---@param client obsidian.Client
+        ---@param workspace obsidian.Workspace
+        ---@diagnostic disable-next-line: unused-local
+        post_set_workspace = function(client, workspace)
+          -- TODO: make sure this only runs when we're inside a vault.
+          -- client.log.info("Changing directory to %s", workspace.path)
+          -- vim.cmd.cd(tostring(workspace.path))
+        end,
+      },
+
+      ui = {
+        enable = true, -- set to false to disable all additional syntax features
+        update_debounce = 800, -- update delay after a text change (in milliseconds)
+        max_file_length = 5000,
+
+        callouts = {
+          -- This is how the Callout will be rendered after the char
+          -- ex: <char>Note
+          ['Note'] = {
+            aliases = {},
+            char = '',
+            hl_group = 'ObsidianCalloutNote',
+          },
+          ['Abstract'] = {
+            aliases = {
+              'Summary',
+              'Tldr',
+            },
+            char = '',
+            hl_group = 'ObsidianCalloutAbstract',
+          },
+          ['Info'] = {
+            aliases = {},
+            char = '',
+            hl_group = 'ObsidianCalloutInfo',
+          },
+          ['Todo'] = {
+            aliases = {},
+            char = '',
+            hl_group = 'ObsidianCalloutTodo',
+          },
+          ['Tip'] = {
+            aliases = {
+              'Hint',
+              'Important',
+            },
+            char = '󰈸',
+            hl_group = 'ObsidianCalloutTip',
+          },
+          ['Success'] = {
+            aliases = {
+              'Check',
+              'Done',
+            },
+            char = '󰄬',
+            hl_group = 'ObsidianCalloutSuccess',
+          },
+          ['Question'] = {
+            aliases = {
+              'Help',
+              'FAQ',
+            },
+            char = '',
+            hl_group = 'ObsidianCalloutQuestion',
+          },
+          ['Warning'] = {
+            aliases = {
+              'Caution',
+              'Attentition',
+            },
+            char = '',
+            hl_group = 'ObsidianCalloutWarning',
+          },
+          ['Failure'] = {
+            aliases = {
+              'Fail',
+              'Missing',
+            },
+            char = '',
+            hl_group = 'ObsidianCalloutFailure',
+          },
+          ['Danger'] = {
+            aliases = {
+              'Error',
+            },
+            char = '',
+            hl_group = 'ObsidianCalloutDanger',
+          },
+          ['Bug'] = {
+            aliases = {},
+            char = '',
+            hl_group = 'ObsidianCalloutBug',
+          },
+          ['Example'] = {
+            aliases = {},
+            char = '',
+            hl_group = 'ObsidianCalloutExample',
+          },
+          ['Quote'] = {
+            aliases = {},
+            char = '󱆨',
+            hl_group = 'ObsidianCalloutQuote',
+          },
+        },
+
+        -- Define how various check-boxes are displayed
+        checkboxes = {
+          -- NOTE: the 'char' value has to be a single character, and the highlight groups are defined below.
+          [' '] = { order = 1, char = '󰄱', hl_group = 'ObsidianTodo' },
+          ['x'] = { order = 2, char = '', hl_group = 'ObsidianDone' },
+          ['>'] = { order = 3, char = '', hl_group = 'ObsidianRightArrow' },
+          ['!'] = { order = 4, char = '', hl_group = 'ObsidianTilde' },
+          ['~'] = { order = 5, char = '󰰱', hl_group = 'ObsidianTilde' },
+          ['?'] = { order = 6, char = '', hl_group = 'ObsidianTilde' },
+        },
+
+        bullets = { char = '•', hl_group = 'ObsidianBullet' },
+        external_link_icon = { char = '', hl_group = 'ObsidianExtLinkIcon' },
+        reference_text = { hl_group = 'ObsidianRefText' },
+        highlight_text = { hl_group = 'ObsidianHighlightText' },
+        tags = { hl_group = 'ObsidianTag' },
+        block_ids = { hl_group = 'ObsidianBlockID' },
+
+        hl_groups = {
+          -- The options are passed directly to `vim.api.nvim_set_hl()`. See `:help nvim_set_hl`.
+          ObsidianTodo = { bold = true, fg = '#f78c6c' },
+          ObsidianDone = { bold = true, fg = '#89ddff' },
+          ObsidianRightArrow = { bold = true, fg = '#f78c6c' },
+          ObsidianTilde = { bold = true, fg = '#ff5370' },
+          ObsidianBullet = { bold = true, fg = '#89ddff' },
+          ObsidianRefText = { underline = true, fg = '#c792ea' },
+          ObsidianExtLinkIcon = { fg = '#c792ea' },
+          ObsidianTag = { italic = true, fg = '#89ddff' },
+          ObsidianBlockID = { italic = true, fg = '#89ddff' },
+          ObsidianHighlightText = { bg = '#75662e' },
+          -- Callout highlights
+          ObsidianCalloutNote = { bg = '#1072b8' },
+          ObsidianCalloutAbstract = { bg = '#d7e6fa' },
+          ObsidianCalloutInfo = { bg = '#6a93e5' },
+          ObsidianCalloutTodo = { bg = '#6a93e5' },
+          ObsidianCalloutTip = { bg = '#d7e6fa' },
+          ObsidianCalloutSuccess = { bg = '#9fc360' },
+          ObsidianCalloutQuestion = { bg = '#faebd7' },
+          ObsidianCalloutWarning = { bg = '#faebd7' },
+          ObsidianCalloutFailure = { bg = '#ee5d5c' },
+          ObsidianCalloutDanger = { bg = '#ee5d5c' },
+          ObsidianCalloutBug = { bg = '#ee5d5c' },
+          ObsidianCalloutExample = { bg = '#c792ea' },
+          ObsidianCalloutQuote = { bg = '#E9F0FD' },
+        },
+      },
+    },
+  },
+}

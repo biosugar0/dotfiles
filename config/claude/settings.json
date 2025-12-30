@@ -1,0 +1,239 @@
+{
+  "env": {
+    "ENABLE_TOOL_SEARCH": "false",
+    "BASH_DEFAULT_TIMEOUT_MS": "300000",
+    "MCP_TOOL_TIMEOUT": "1200000",
+    "MCP_TIMEOUT": "3600000",
+    "MAX_MCP_OUTPUT_TOKENS": "50000",
+    "BASH_MAX_TIMEOUT_MS": "1200000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "API_TIMEOUT_MS": "1200000",
+    "DISABLE_COST_WARNINGS": "0",
+    "ENABLE_BACKGROUND_TASKS": "true",
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "RUST_LOG": "warn",
+    "SHELL": "/bin/zsh"
+  },
+  "attribution": {
+    "commits": "none",
+    "pullRequests": "none"
+  },
+  "permissions": {
+    "additionalDirectories": [
+      "~/.config/claude/plans/"
+    ],
+    "allow": [
+      "mcp__gpt-5",
+      "mcp__playwright",
+      "mcp__context7",
+      "Bash(macos-notify-cli:*)",
+      "List(*)",
+      "Edit(*)",
+      "MultiEdit(*)",
+      "Glob(*)",
+      "WebFetch",
+      "WebSearch",
+      "Read(~/ghq/**)",
+      "Write(~/ghq/**)",
+      "Edit(~/ghq/**)",
+      "Read(~/.claude/**)",
+      "Read(~/.config/**)",
+      "Bash(git:*)",
+      "Bash(npm run:*)",
+      "Bash(yarn:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
+      "Bash(tsc)",
+      "Bash(tsx:*)",
+      "Bash(eslint:*)",
+      "Bash(prettier:*)",
+      "Bash(python3:*)",
+      "Bash(uv:*)",
+      "Bash(poetry:*)",
+      "Bash(pytest:*)",
+      "Bash(cd:*)",
+      "Bash(ls:*)",
+      "Bash(fd:*)",
+      "Bash(gh:*)",
+      "Bash(say:*)",
+      "Bash(mkdir:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf /*)",
+      "Bash(sudo rm:*)",
+      "Bash(dd:*)",
+      "Bash(sudo dd:*)",
+      "Bash(mkfs:*)",
+      "Bash(sudo mkfs:*)",
+      "Bash(fdisk:*)",
+      "Bash(sudo fdisk:*)",
+      "Bash(> /dev/*)",
+      "Bash(>> /dev/*)",
+      "Bash(docker system prune -af)",
+      "Bash(chmod 777 /*)",
+      "Bash(chown root:*)",
+      "Bash(sudo chmod 777:*)",
+      "Bash(sudo chown:*)",
+      "Bash(sudo -i:*)",
+      "Bash(sudo su:*)",
+      "Bash(sudo mount:*)",
+      "Bash(sudo umount:*)",
+      "Bash(sudo passwd:*)",
+      "Bash(rm -rf .git)",
+      "Bash(git push --force-with-lease origin main)",
+      "Bash(git push -f origin main)",
+      "Bash(npm publish:*)",
+      "Bash(deno publish:*)",
+      "Edit(/etc/**)",
+      "Edit(/usr/**)",
+      "Edit(/var/**)",
+      "Edit(/opt/**)",
+      "Edit(/bin/**)",
+      "Edit(/sbin/**)",
+      "Edit(/dev/**)",
+      "Edit(/etc/passwd)",
+      "Edit(/etc/sudoers)",
+      "Write(/etc/**)",
+      "Write(/usr/**)",
+      "Write(/var/**)",
+      "Write(/opt/**)",
+      "Write(/bin/**)",
+      "Write(/sbin/**)",
+      "Write(/dev/**)",
+      "Write(/etc/passwd)",
+      "Write(/etc/sudoers)",
+      "Edit(~/.ssh/id_*)",
+      "Edit(~/.ssh/*_rsa)",
+      "Edit(~/.ssh/*_ecdsa)",
+      "Edit(~/.ssh/*_ed25519)",
+      "Write(~/.ssh/id_*)",
+      "Write(~/.ssh/*_rsa)",
+      "Write(~/.ssh/*_ecdsa)",
+      "Write(~/.ssh/*_ed25519)",
+      "Read(id_rsa)",
+      "Read(id_ed25519)",
+      "Write(~/.zshrc)",
+      "Write(~/.zprofile)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(.dev.vars)",
+      "Read(.dev.vars.*)",
+      "Write(.env*)",
+      "Write(**/secrets/**)"
+    ],
+    "defaultMode": "acceptEdits"
+  },
+  "model": "opus",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/session-start.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "auto|manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/pre-compact-save.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "elicitation_dialog",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /System/Library/Sounds/Sosumi.aiff",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat ~/.config/claude/hooks/golden-rules.txt 2>/dev/null || true; echo ''; (git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --is-inside-work-tree >/dev/null 2>&1 && git -C \"$CLAUDE_PROJECT_DIR\" status --short) || true; echo '\n---\nCurrent time: '$(date '+%Y-%m-%d %H:%M:%S')",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat ~/.config/claude/styles/default_style.md | jq -Rs '{hookSpecificOutput:{hookEventName:\"UserPromptSubmit\",additionalContext:.}}'",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Evaluate if Claude should stop. Context: $ARGUMENTS\n\nRules:\n- APPROVE if: waiting for user input, asked a question, all TODOs done, task complete\n- BLOCK only if: incomplete TODOs exist AND AI can complete them AND no user input needed\n\nDefault: approve. Block only for clear unfinished work.\n\nRespond with ONLY valid JSON (no explanation):\n{\"ok\": true, \"decision\": \"approve\"}\nor\n{\"ok\": false, \"decision\": \"block\", \"reason\": \"reason for Claude\", \"systemMessage\": \"User-visible message about continuing\"}",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /System/Library/Sounds/Submarine.aiff",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Evaluate if subagent should stop. Input: $ARGUMENTS\n\nRules:\n- APPROVE if: assigned task complete, ready to report to parent, waiting for user\n- BLOCK only if: task incomplete AND can complete independently AND no additional info needed\n\nDefault: approve. Block only for clear unfinished work.\n\nRespond with ONLY valid JSON (no explanation):\n{\"ok\": true, \"decision\": \"approve\"}\nor\n{\"ok\": false, \"decision\": \"block\", \"reason\": \"reason for subagent\", \"systemMessage\": \"User-visible message about continuing\"}",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /System/Library/Sounds/Blow.aiff",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "document-skills@anthropic-agent-skills": true
+  },
+  "extraKnownMarketplaces": {
+    "local-plugins": {
+      "source": {
+        "source": "directory",
+        "path": "~/.config/claude/plugins"
+      }
+    }
+  },
+  "alwaysThinkingEnabled": true
+}
