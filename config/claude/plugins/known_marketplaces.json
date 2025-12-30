@@ -1,0 +1,26 @@
+{
+  "local-plugins": {
+    "source": {
+      "source": "directory",
+      "path": "/Users/ykimura/.config/claude/plugins"
+    },
+    "installLocation": "/Users/ykimura/.config/claude/plugins",
+    "lastUpdated": "2025-10-31T00:19:39.711Z"
+  },
+  "anthropic-agent-skills": {
+    "source": {
+      "source": "github",
+      "repo": "anthropics/skills"
+    },
+    "installLocation": "/Users/ykimura/.config/claude/plugins/marketplaces/anthropic-agent-skills",
+    "lastUpdated": "2025-12-05T07:06:26.589Z"
+  },
+  "claude-plugins-official": {
+    "source": {
+      "source": "github",
+      "repo": "anthropics/claude-plugins-official"
+    },
+    "installLocation": "/Users/ykimura/.config/claude/plugins/marketplaces/claude-plugins-official",
+    "lastUpdated": "2025-12-18T04:03:54.265Z"
+  }
+}
