@@ -1,0 +1,33 @@
+#!/bin/bash
+{{- if eq .chezmoi.os "darwin" }}
+set -euo pipefail
+
+echo "==> Configuring macOS defaults..."
+
+# キーボード
+defaults write NSGlobalDomain KeyRepeat -int 1
+defaults write NSGlobalDomain InitialKeyRepeat -int 11
+defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
+
+# Finder
+defaults write com.apple.finder AppleShowAllFiles -bool true
+defaults write com.apple.finder ShowPathbar -bool true
+defaults write com.apple.finder ShowStatusBar -bool true
+defaults write NSGlobalDomain AppleShowAllExtensions -bool true
+
+# Dock
+defaults write com.apple.dock autohide -bool true
+defaults write com.apple.dock autohide-delay -float 0
+defaults write com.apple.dock show-recents -bool false
+
+# スクリーンショット
+defaults write com.apple.screencapture location -string "${HOME}/Desktop"
+defaults write com.apple.screencapture type -string "png"
+defaults write com.apple.screencapture disable-shadow -bool true
+
+# トラックパッド
+defaults write com.apple.AppleMultitouchTrackpad Clicking -bool true
+defaults write NSGlobalDomain com.apple.swipescrolldirection -bool true
+
+echo "==> macOS defaults configured (some changes require logout)"
+{{- end }}

@@ -1,0 +1,129 @@
+presets:
+  codex:
+    allow:
+      - "."
+      - "/private/tmp"
+      - "/dev/tty"
+      - "$CLAUDE_CONFIG_DIR"
+      - "$HOME/.npm"
+      - "$HOME/.cache/"
+      - "$HOME/.claude/"
+      - "$HOME/Library/Caches/"
+      - "$HOME/.local/"
+      - "$HOME/.serena/"
+      - "$HOME/ghq/github.com/"
+      - "$HOME/.aws/cli/cache/"
+      - "$HOME/.aws/sso"
+      - "$HOME/.codex/"
+      - "$HOME/Library/Logs/"
+      - "$HOME/Library/Application Support/Google/Chrome/"
+      - "$HOME/Library/Application Support/Chromium/"
+      - "$HOME/Library/Caches/com.google.Chrome/"
+      - "$HOME/Library/Application Support/Google/Chrome/Default/"
+      - "$HOME/Library/Application Support/Google/Chrome/Profile*/"
+      - "$HOME/Library/Application Support/CrashReporter/"
+      - "$HOME/Downloads/"
+      - "$HOME/Desktop/"
+      - "/var/folders/"
+      # Node.js/npm関連
+      - "$HOME/.node/"
+      - "$HOME/.nvm/"
+      - "$HOME/.yarn/"
+      - "$HOME/.pnpm-store/"
+      # Python関連
+      - "$HOME/.pyenv/"
+      - "$HOME/.virtualenvs/"
+      - "$HOME/.poetry/"
+      - "$HOME/.ruff/"
+      - "$HOME/.uv/"
+      # Rust関連
+      - "$HOME/.cargo/"
+      - "$HOME/.rustup/"
+      # Git/開発ツール
+      - "$HOME/.ssh/"
+      - "$HOME/.gitconfig"
+      # AI/LLM関連ツール
+      - "$HOME/.config/mcp/"
+      - "$HOME/.continue/"
+      # macOS固有
+      - "$HOME/Library/Application Support/Code/"
+      - "$HOME/Library/Preferences/"
+      # Chrome/Chromium 実行ファイル
+      - "/Applications/Google Chrome.app/"
+      - "/Applications/Google Chrome Beta.app/"
+      - "/Applications/Google Chrome Canary.app/"
+      - "/Applications/Chromium.app/"
+      # Chrome GPU/Network プロセス用
+      - "/System/Library/Extensions/"
+      - "/System/Library/Frameworks/"
+      - "/usr/lib/"
+      - "/usr/libexec/"
+      - "/private/var/db/"
+      - "/Library/GPUBundles/"
+      - "$HOME/Library/Saved Application State/"
+    allow-keychain: true
+    allow-git: true
+  claude-code:
+    allow:
+      - "."
+      - "/private/tmp"
+      - "/dev/tty"
+      - "$CLAUDE_CONFIG_DIR"
+      - "$HOME/.npm"
+      - "$HOME/.cache/"
+      - "$HOME/.claude/"
+      - "$HOME/Library/Caches/"
+      - "$HOME/.local/"
+      - "$HOME/.serena/"
+      - "$HOME/ghq/github.com/"
+      - "$HOME/.aws/cli/cache/"
+      - "$HOME/.aws/sso"
+      - "$HOME/.codex/"
+      - "$HOME/Library/Logs/"
+      - "$HOME/Library/Application Support/Google/Chrome/"
+      - "$HOME/Library/Application Support/Chromium/"
+      - "$HOME/Library/Caches/com.google.Chrome/"
+      - "$HOME/Library/Application Support/Google/Chrome/Default/"
+      - "$HOME/Library/Application Support/Google/Chrome/Profile*/"
+      - "$HOME/Library/Application Support/CrashReporter/"
+      - "$HOME/Downloads/"
+      - "$HOME/Desktop/"
+      - "/var/folders/"
+      # Node.js/npm関連
+      - "$HOME/.node/"
+      - "$HOME/.nvm/"
+      - "$HOME/.yarn/"
+      - "$HOME/.pnpm-store/"
+      # Python関連
+      - "$HOME/.pyenv/"
+      - "$HOME/.virtualenvs/"
+      - "$HOME/.poetry/"
+      - "$HOME/.ruff/"
+      - "$HOME/.uv/"
+      # Rust関連
+      - "$HOME/.cargo/"
+      - "$HOME/.rustup/"
+      # Git/開発ツール
+      - "$HOME/.ssh/"
+      - "$HOME/.gitconfig"
+      # AI/LLM関連ツール
+      - "$HOME/.config/mcp/"
+      - "$HOME/.continue/"
+      # macOS固有
+      - "$HOME/Library/Application Support/Code/"
+      - "$HOME/Library/Preferences/"
+      # Chrome/Chromium 実行ファイル
+      - "/Applications/Google Chrome.app/"
+      - "/Applications/Google Chrome Beta.app/"
+      - "/Applications/Google Chrome Canary.app/"
+      - "/Applications/Chromium.app/"
+      # Chrome GPU/Network プロセス用
+      - "/System/Library/Extensions/"
+      - "/System/Library/Frameworks/"
+      - "/usr/lib/"
+      - "/usr/libexec/"
+      - "/private/var/db/"
+      - "/Library/GPUBundles/"
+      - "$HOME/Library/Saved Application State/"
+    allow-keychain: true
+    allow-git: true
