@@ -1,4 +1,3 @@
-tap "homebrew/bundle"
 tap "warashi/tap"
 brew "awscli"
 brew "bat"

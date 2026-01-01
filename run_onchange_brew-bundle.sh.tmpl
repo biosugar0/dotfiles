@@ -2,6 +2,12 @@
 # Brewfile hash: {{ include "Brewfile" | sha256sum }}
 set -euo pipefail
 
+# Skip in CI environment
+if [[ -n "${CI:-}" ]]; then
+  echo "==> Skipping brew bundle in CI"
+  exit 0
+fi
+
 echo "==> Running brew bundle..."
 
 if command -v brew &>/dev/null; then
