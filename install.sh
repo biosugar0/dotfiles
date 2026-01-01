@@ -1,52 +1,38 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-echo "SCRIPT_DIR: $SCRIPT_DIR"
+echo "=== dotfiles installer (chezmoi) ==="
 
-# スクリプト中で使われるPATHを予め通しておく
-PATH="$PATH:/opt/homebrew/bin"
-
-# ディレクトリのsymlinkを作る
-function symlink_dir() {
-    src=$1
-    dst=$2
-    [[ -L "$dst" ]] && rm -f "$dst"  # リンクがある場合に削除する
-    ln -sf "$src" "$dst"
-}
-
-## Homebrewのインストール
-if ! command -v brew >/dev/null 2>&1; then
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    eval "$(/opt/homebrew/bin/brew shellenv)"
+# Homebrew
+if ! command -v brew &>/dev/null; then
+  echo "Installing Homebrew..."
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 fi
+eval "$(/opt/homebrew/bin/brew shellenv)"
 
-# Brewfileを使用してHomebrewのパッケージを冪等にインストール
+# Brewfile
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [[ -f "$SCRIPT_DIR/Brewfile" ]]; then
-    brew bundle --file="$SCRIPT_DIR/Brewfile"
-else
-    echo "Brewfile not found in $SCRIPT_DIR"
-    exit 1
+  echo "Installing packages from Brewfile..."
+  brew bundle --file="$SCRIPT_DIR/Brewfile"
 fi
 
-# configディレクトリを作成し、設定ファイルをsymlinkする
-mkdir -p $HOME/.config/
-
-# .config/zshでzshの設定を管理するため、ZDOTDIRを指定する
-new_content="ZDOTDIR=\$HOME/.config/zsh"
-# /etc/zshenv に追記する
-echo "$new_content" | sudo tee /etc/zshenv > /dev/null
-# 成功メッセージの表示
-if [[ $? -eq 0 ]]; then
-  echo "/etc/zshenv was successfully updated."
-else
-  echo "Failed to update /etc/zshenv."
+# chezmoi
+if ! command -v chezmoi &>/dev/null; then
+  echo "Installing chezmoi..."
+  brew install chezmoi
 fi
 
-# シンボリックリンクの作成
-symlink_dir $SCRIPT_DIR/config/zsh $HOME/.config/zsh
-symlink_dir $SCRIPT_DIR/config/git $HOME/.config/git
-symlink_dir $SCRIPT_DIR/config/tmux $HOME/.config/tmux
-symlink_dir $SCRIPT_DIR/config/nvim $HOME/.config/nvim
-symlink_dir $SCRIPT_DIR/config/wezterm $HOME/.config/wezterm
-symlink_dir $SCRIPT_DIR/config/starship.toml $HOME/.config/starship.toml
+# Apply dotfiles
+echo "Applying dotfiles with chezmoi..."
+chezmoi init --source "$SCRIPT_DIR" --apply
+
+# tmux plugins (tpm)
+if [[ ! -d "$HOME/.config/tmux/plugins/tpm" ]]; then
+  echo "Installing tmux plugin manager..."
+  git clone https://github.com/tmux-plugins/tpm "$HOME/.config/tmux/plugins/tpm"
+fi
+
+echo "=== Done! ==="
+echo "Run 'exec zsh' to reload shell"
+echo "Run 'prefix + I' in tmux to install plugins"

@@ -1,0 +1,36 @@
+# zsh runtime files
+.config/zsh/.zsh_history
+.config/zsh/.zcompdump*
+
+# Claude Code runtime files
+.config/claude/.claude.json
+.config/claude/.claude.json.backup
+.config/claude/.claude/
+.config/claude/history.jsonl
+.config/claude/stats-cache.json
+.config/claude/debug/
+.config/claude/file-history/
+.config/claude/projects/
+.config/claude/session-env/
+.config/claude/shell-snapshots/
+.config/claude/todos/
+.config/claude/.serena/
+.config/claude/agents/
+.config/claude/chrome/
+.config/claude/extensions/
+.config/claude/ide/
+.config/claude/plugins/cache/
+.config/claude/plugins/*.tar.gz
+.config/claude/plugins/marketplaces/
+.config/claude/plugins/install-counts-cache.json
+.config/claude/plugins/installed_plugins.json
+.config/claude/plugins/repos/
+.config/claude/ai/
+.config/claude/plans/
+.config/claude/image-cache/
+
+# tmux runtime (plugins managed by tpm)
+.config/tmux/plugins/
+.config/tmux/resurrect/
+.config/tmux/.claude/
+.config/tmux/.serena/

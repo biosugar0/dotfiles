@@ -95,7 +95,7 @@ zstyle ':completion:*' select-prompt '%SScrolling active: current selection at l
 
 # compinitの実行（補完システムを初期化）
 autoload -Uz compinit
-compinit -u
+compinit -d "$ZSH_COMPDUMP"
 
 # タブキーの動作確認
 bindkey '^I' expand-or-complete
