@@ -23,10 +23,10 @@ jobs:
         run: chezmoi init --source=$PWD --apply
 
       - name: Verify no drift
-        run: chezmoi verify
+        run: chezmoi verify --source=$PWD
 
       - name: Check chezmoi health
-        run: chezmoi doctor
+        run: chezmoi doctor --source=$PWD
 
       - name: Verify files exist
         run: |
