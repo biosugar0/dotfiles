@@ -22,6 +22,12 @@ jobs:
       - name: Apply dotfiles
         run: chezmoi init --source=$PWD --apply
 
+      - name: Verify no drift
+        run: chezmoi verify
+
+      - name: Check chezmoi health
+        run: chezmoi doctor
+
       - name: Verify files exist
         run: |
           echo "=== Checking applied files ==="
