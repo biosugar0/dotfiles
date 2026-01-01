@@ -1,2 +1,7 @@
 .serena/
+
+# zsh runtime
 .zsh_history
+.zcompdump*
+dot_config/zsh/.zsh_history
+dot_config/zsh/dot_zcompdump*

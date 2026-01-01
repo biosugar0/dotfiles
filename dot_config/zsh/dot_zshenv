@@ -1,8 +1,11 @@
-# XDG
-export XDG_CONFIG_HOME=${HOME}/.config
-export XDG_CACHE_HOME=${HOME}/.cache
-export XDG_DATA_HOME=${HOME}/.local/share
-export XDG_STATE_HOME=${HOME}/.local/state
+# XDG is already set in ~/.zshenv (bootstrap)
+
+# zsh runtime files in ZDOTDIR
+export HISTFILE="$ZDOTDIR/.zsh_history"
+export ZSH_COMPDUMP="$ZDOTDIR/.zcompdump"
+
+# Disable macOS .zsh_sessions
+export SHELL_SESSIONS_DISABLE=1
 
 # Make PATH entries unique
 typeset -U PATH path
@@ -25,8 +28,6 @@ export VISUAL=nvim
 export DOCKER_BUILDKIT=1
 
 # history
-# 履歴ファイルの保存先
-export HISTFILE=${XDG_CACHE_HOME}/zsh/.zsh_history
 # メモリに保存される履歴の件数
 export HISTSIZE=1000
 # 履歴ファイルに保存される履歴の件数
