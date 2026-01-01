@@ -1,38 +1,77 @@
+tap "aquaproj/aqua"
 tap "warashi/tap"
-brew "awscli"
+
+# Core tools
+brew "chezmoi"
+brew "git"
+brew "gh"
+brew "ghq"
+brew "tree"
+brew "wget"
+
+# Shell & Terminal
 brew "bat"
-brew "deno"
-brew "node"
-brew "eslint"
 brew "eza"
 brew "fd"
 brew "fzf"
-brew "gh"
-brew "ghq"
-brew "git"
+brew "ripgrep"
+brew "jq"
+brew "starship"
+brew "tmux"
+brew "zplug"
 brew "gnu-sed"
 brew "gnu-time"
+
+# Languages & Runtimes
 brew "go"
-brew "jq"
-brew "neovim"
+brew "deno"
+brew "node"
 brew "nvm"
+brew "yarn"
+
+# Python
+brew "uv"
+brew "poetry"
+
+# Database
+brew "postgresql@16"
+
+# Development tools
+brew "aqua"
+brew "codex"
+brew "docker-compose"
+brew "golangci-lint"
+brew "neovim"
+
+# Linters & Formatters
+brew "eslint"
 brew "prettier"
-brew "ripgrep"
 brew "shfmt"
-brew "starship"
 brew "stylua"
+brew "yamllint"
+
+# Infrastructure
+brew "awscli"
 brew "terraform"
 brew "tflint"
-brew "tmux"
-brew "uv"
-brew "yarn"
-brew "zplug"
-brew "yamllint"
+
+# Casks - Apps
 cask "1password-cli"
 cask "chatgpt"
-cask "docker"
-cask "font-monaspace"
+cask "docker-desktop"
+cask "drawio"
+cask "obsidian"
+cask "tableplus"
 cask "visual-studio-code"
 cask "wezterm"
-cask "obsidian"
+
+# Casks - Cloud
+cask "gcloud-cli"
+cask "session-manager-plugin"
+
+# Casks - Fonts
+cask "font-cica"
+cask "font-hack-nerd-font"
+cask "font-monaspace"
+
 # cage is installed via run_once script with --no-quarantine
