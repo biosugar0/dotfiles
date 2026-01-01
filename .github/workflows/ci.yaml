@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install chezmoi
+        run: |
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            brew install chezmoi
+          else
+            sh -c "$(curl -fsLS get.chezmoi.io)" -- -b ~/.local/bin
+            echo "$HOME/.local/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Apply dotfiles (dry-run)
+        run: chezmoi init --source=$PWD --apply --dry-run
+
+      - name: Apply dotfiles
+        run: chezmoi init --source=$PWD --apply
+
+      - name: Verify files exist
+        run: |
+          echo "=== Checking applied files ==="
+          ls -la ~/.zshenv
+          ls -la ~/.config/zsh/
+          ls -la ~/.config/git/
+          ls -la ~/.config/nvim/
+          echo "=== All checks passed ==="
