@@ -36,4 +36,4 @@ cask "font-monaspace"
 cask "visual-studio-code"
 cask "wezterm"
 cask "obsidian"
-cask "cage"
+# cage is installed via run_once script with --no-quarantine
