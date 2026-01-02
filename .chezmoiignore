@@ -27,14 +27,7 @@ install.sh
 .config/claude/chrome/
 .config/claude/extensions/
 .config/claude/ide/
-.config/claude/plugins/cache/
-.config/claude/plugins/*.tar.gz
-.config/claude/plugins/marketplaces/
-.config/claude/plugins/install-counts-cache.json
-.config/claude/plugins/installed_plugins.json
-.config/claude/plugins/repos/
-.config/claude/plugins/known_marketplaces.json
-.config/claude/plugins/.claude-plugin/
+.config/claude/plugins/
 .config/claude/ai/
 .config/claude/plans/
 .config/claude/image-cache/
