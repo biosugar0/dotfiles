@@ -16,8 +16,9 @@ wezterm.on('window-config-reloaded', function(window, pane)
   wezterm.log_info('the config was reloaded for this window!')
 end)
 config.audible_bell = 'Disabled'
-config.scrollback_lines = 13500
+config.scrollback_lines = 100000
 config.use_dead_keys = false
+config.front_end = 'WebGpu'
 config.adjust_window_size_when_changing_font_size = true
 
 -- 最初からフルスクリーンで起動
