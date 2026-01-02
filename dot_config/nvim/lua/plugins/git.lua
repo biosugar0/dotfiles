@@ -125,6 +125,7 @@ return {
       'GinLog',
       'GinPatch',
       'GinStatus',
+      'GinBlame',
     },
     keys = {
       '<Leader>aa',
@@ -134,6 +135,7 @@ return {
       '<Leader>aC',
       '<Leader>al',
       '<Leader>aL',
+      '<Leader>aB',
       '<Leader>ao',
       '<Leader>aw',
     },
@@ -146,6 +148,7 @@ return {
       vim.keymap.set('n', '<Leader>aC', '<Cmd>Gin commit --amend<CR>', { silent = true })
       vim.keymap.set('n', '<Leader>al', ':<C-u>GinLog<CR>', { silent = true })
       vim.keymap.set('n', '<Leader>aL', ':<C-u>GinLog -- %<CR>', { silent = true })
+      vim.keymap.set('n', '<Leader>aB', ':<C-u>GinBlame %<CR>', { silent = true })
       vim.keymap.set('n', '<Leader>ao', '<Cmd>GinBrowse<CR>', { silent = true })
       vim.keymap.set('x', '<Leader>ao', ':GinBrowse<CR>', { silent = true })
       vim.keymap.set('n', '<Leader>aw', '<Cmd>GinBrowse --pr<CR>', { silent = true })
@@ -182,19 +185,36 @@ return {
 
       -- Gin specific configurations
       vim.g.gin_proxy_apply_without_confirm = true -- 確認なしで変更を適用
+
+      -- Diff: deltaプロセッサ + diffjump/difffold
       vim.g.gin_diff_default_args = {
         '++processor=delta --diff-highlight --keep-plus-minus-markers',
       }
+      vim.g.gin_diff_persistent_args = {
+        '++diffjump',
+        '++difffold',
+      }
+      -- Nerd Fontアイコンでdifffold表示
+      vim.g.gin_difffold_prefixes = vim.g['gin#difffold#prefixes_nerdfont']
 
+      -- Branch
       vim.g.gin_branch_default_args = { '--all', '--sort=-committerdate' }
+
+      -- Browse
       vim.g.gin_browse_default_args = {
         '--remote=origin',
         '--permalink',
       }
+
+      -- Log: emojifyは常に適用、graphとpretty formatはデフォルト
+      vim.g.gin_log_persistent_args = { '++emojify' }
       vim.g.gin_log_default_args = {
-        '++emojify',
+        '--graph',
         '--pretty=%C(yellow)%h%C(reset)%C(auto)%d%C(reset) %s %C(cyan)@%an%C(reset) %C(magenta)[%ar]%C(reset)',
       }
+
+      -- Blame: emojify有効
+      vim.g.gin_blame_persistent_args = { '++emojify' }
     end,
   },
 }
