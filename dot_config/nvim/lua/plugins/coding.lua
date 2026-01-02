@@ -47,8 +47,11 @@ return {
       { 'hrsh7th/cmp-nvim-lsp' },
       { 'j-hui/fidget.nvim' },
       { 'folke/trouble.nvim' },
+      { 'yioneko/nvim-vtsls' }, -- vtsls helper
     },
     config = function()
+      -- vtsls lspconfig統合
+      require('lspconfig.configs').vtsls = require('vtsls').lspconfig
 
       -- Capabilitiesの設定
       local capabilities = vim.lsp.protocol.make_client_capabilities()
@@ -118,10 +121,29 @@ return {
       -- grn: rename, gra: code_action, grr: references, gri: implementation
       -- gO: document_symbol, K: hover, CTRL-S (insert): signature_help
       local on_attach = function(client, bufnr)
-        if client.name == 'ts_ls' then
+        -- vtsls/ts_ls のフォーマットを無効化 (prettierを使用)
+        if client.name == 'vtsls' or client.name == 'ts_ls' then
           client.server_capabilities.documentFormattingProvider = false
           client.server_capabilities.documentRangeFormattingProvider = false
         end
+
+        -- vtsls 専用コマンド
+        if client.name == 'vtsls' then
+          local vtsls = require('vtsls')
+          vim.keymap.set('n', 'gS', function()
+            vtsls.commands.goto_source_definition(0)
+          end, { buffer = bufnr, desc = 'Goto source definition' })
+          vim.keymap.set('n', '<leader>oi', function()
+            vtsls.commands.organize_imports(bufnr)
+          end, { buffer = bufnr, desc = 'Organize imports' })
+          vim.keymap.set('n', '<leader>ai', function()
+            vtsls.commands.add_missing_imports(bufnr)
+          end, { buffer = bufnr, desc = 'Add missing imports' })
+          vim.keymap.set('n', '<leader>ru', function()
+            vtsls.commands.remove_unused_imports(bufnr)
+          end, { buffer = bufnr, desc = 'Remove unused imports' })
+        end
+
         local bufopts = { noremap = true, silent = true, buffer = bufnr }
         -- カスタムキーマップ (デフォルトを補完)
         vim.keymap.set('n', 'gd', vim.lsp.buf.definition, bufopts)
@@ -200,7 +222,30 @@ return {
             },
           },
         },
-        ts_ls = {},
+        vtsls = {
+          settings = {
+            typescript = {
+              inlayHints = {
+                parameterNames = { enabled = 'literals' },
+                parameterTypes = { enabled = true },
+                variableTypes = { enabled = true },
+                propertyDeclarationTypes = { enabled = true },
+                functionLikeReturnTypes = { enabled = true },
+                enumMemberValues = { enabled = true },
+              },
+            },
+            javascript = {
+              inlayHints = {
+                parameterNames = { enabled = 'literals' },
+                parameterTypes = { enabled = true },
+                variableTypes = { enabled = true },
+                propertyDeclarationTypes = { enabled = true },
+                functionLikeReturnTypes = { enabled = true },
+                enumMemberValues = { enabled = true },
+              },
+            },
+          },
+        },
         denols = {}, -- Deno/非Denoプロジェクトを自動検出 (nvim-lspconfig PR#4207)
         bashls = {},
         terraformls = {},
