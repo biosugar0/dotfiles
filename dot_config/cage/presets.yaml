@@ -1,129 +1,190 @@
 presets:
-  codex:
+  # 基本プリセット（共通パス）
+  base:
     allow:
       - "."
-      - "/private/tmp"
+      - path: "/tmp"
+        eval-symlinks: true  # macOSで /private/tmp に自動解決
       - "/dev/tty"
-      - "$CLAUDE_CONFIG_DIR"
-      - "$HOME/.npm"
+      - "/var/folders/"
       - "$HOME/.cache/"
-      - "$HOME/.claude/"
-      - "$HOME/Library/Caches/"
       - "$HOME/.local/"
-      - "$HOME/.serena/"
-      - "$HOME/ghq/github.com/"
+      - "$HOME/Library/Caches/"
+      - "$HOME/Library/Logs/"
+      - "$HOME/Library/Preferences/"
+      - "$HOME/Library/Saved Application State/"
+      - "$HOME/Downloads/"
+      - "$HOME/Desktop/"
+    allow-keychain: true
+    allow-git: true
+
+  # Node.js/npm関連
+  npm:
+    allow:
+      - "$HOME/.npm"
+      - "$HOME/.node/"
+      - "$HOME/.nvm/"
+      - "$HOME/.yarn/"
+      - "$HOME/.pnpm-store/"
+
+  # Python関連
+  python:
+    allow:
+      - "$HOME/.pyenv/"
+      - "$HOME/.virtualenvs/"
+      - "$HOME/.poetry/"
+      - "$HOME/.ruff/"
+      - "$HOME/.uv/"
+
+  # Rust関連
+  rust:
+    allow:
+      - "$HOME/.cargo/"
+      - "$HOME/.rustup/"
+
+  # Git/SSH関連
+  git:
+    allow:
+      - "$HOME/.ssh/"
+      - "$HOME/.gitconfig"
+
+  # AWS関連
+  aws:
+    allow:
       - "$HOME/.aws/cli/cache/"
       - "$HOME/.aws/sso"
-      - "$HOME/.codex/"
-      - "$HOME/Library/Logs/"
+
+  # ブラウザ関連（Playwright等）
+  browser:
+    allow:
       - "$HOME/Library/Application Support/Google/Chrome/"
       - "$HOME/Library/Application Support/Chromium/"
       - "$HOME/Library/Caches/com.google.Chrome/"
       - "$HOME/Library/Application Support/Google/Chrome/Default/"
       - "$HOME/Library/Application Support/Google/Chrome/Profile*/"
       - "$HOME/Library/Application Support/CrashReporter/"
-      - "$HOME/Downloads/"
-      - "$HOME/Desktop/"
-      - "/var/folders/"
-      # Node.js/npm関連
-      - "$HOME/.node/"
-      - "$HOME/.nvm/"
-      - "$HOME/.yarn/"
-      - "$HOME/.pnpm-store/"
-      # Python関連
-      - "$HOME/.pyenv/"
-      - "$HOME/.virtualenvs/"
-      - "$HOME/.poetry/"
-      - "$HOME/.ruff/"
-      - "$HOME/.uv/"
-      # Rust関連
-      - "$HOME/.cargo/"
-      - "$HOME/.rustup/"
-      # Git/開発ツール
-      - "$HOME/.ssh/"
-      - "$HOME/.gitconfig"
-      # AI/LLM関連ツール
-      - "$HOME/.config/mcp/"
-      - "$HOME/.continue/"
-      # macOS固有
-      - "$HOME/Library/Application Support/Code/"
-      - "$HOME/Library/Preferences/"
-      # Chrome/Chromium 実行ファイル
       - "/Applications/Google Chrome.app/"
       - "/Applications/Google Chrome Beta.app/"
       - "/Applications/Google Chrome Canary.app/"
       - "/Applications/Chromium.app/"
-      # Chrome GPU/Network プロセス用
       - "/System/Library/Extensions/"
       - "/System/Library/Frameworks/"
       - "/usr/lib/"
       - "/usr/libexec/"
       - "/private/var/db/"
       - "/Library/GPUBundles/"
-      - "$HOME/Library/Saved Application State/"
-    allow-keychain: true
-    allow-git: true
+
+  # AI/LLMツール共通
+  ai-tools:
+    allow:
+      - "$CLAUDE_CONFIG_DIR"
+      - "$HOME/.claude/"
+      - "$HOME/.codex/"
+      - "$HOME/.serena/"
+      - "$HOME/.config/mcp/"
+      - "$HOME/.continue/"
+      - "$HOME/ghq/github.com/"
+      - "$HOME/Library/Application Support/Code/"
+
+  # Claude Code / Codex 統合プリセット（全部入り）
   claude-code:
     allow:
       - "."
-      - "/private/tmp"
+      - path: "/tmp"
+        eval-symlinks: true
       - "/dev/tty"
-      - "$CLAUDE_CONFIG_DIR"
-      - "$HOME/.npm"
+      - "/var/folders/"
+      # キャッシュ・ローカル
       - "$HOME/.cache/"
-      - "$HOME/.claude/"
-      - "$HOME/Library/Caches/"
       - "$HOME/.local/"
+      - "$HOME/Library/Caches/"
+      - "$HOME/Library/Logs/"
+      - "$HOME/Library/Preferences/"
+      - "$HOME/Library/Saved Application State/"
+      - "$HOME/Downloads/"
+      - "$HOME/Desktop/"
+      # AI/LLM
+      - "$CLAUDE_CONFIG_DIR"
+      - "$HOME/.claude/"
+      - "$HOME/.codex/"
       - "$HOME/.serena/"
+      - "$HOME/.config/mcp/"
+      - "$HOME/.continue/"
       - "$HOME/ghq/github.com/"
+      - "$HOME/Library/Application Support/Code/"
+      # Node.js/npm
+      - "$HOME/.npm"
+      - "$HOME/.node/"
+      - "$HOME/.nvm/"
+      - "$HOME/.yarn/"
+      - "$HOME/.pnpm-store/"
+      # Python
+      - "$HOME/.pyenv/"
+      - "$HOME/.virtualenvs/"
+      - "$HOME/.poetry/"
+      - "$HOME/.ruff/"
+      - "$HOME/.uv/"
+      # Rust
+      - "$HOME/.cargo/"
+      - "$HOME/.rustup/"
+      # Git/SSH
+      - "$HOME/.ssh/"
+      - "$HOME/.gitconfig"
+      # AWS
       - "$HOME/.aws/cli/cache/"
       - "$HOME/.aws/sso"
-      - "$HOME/.codex/"
-      - "$HOME/Library/Logs/"
+      # ブラウザ（Playwright MCP等）
       - "$HOME/Library/Application Support/Google/Chrome/"
       - "$HOME/Library/Application Support/Chromium/"
       - "$HOME/Library/Caches/com.google.Chrome/"
       - "$HOME/Library/Application Support/Google/Chrome/Default/"
       - "$HOME/Library/Application Support/Google/Chrome/Profile*/"
       - "$HOME/Library/Application Support/CrashReporter/"
-      - "$HOME/Downloads/"
-      - "$HOME/Desktop/"
-      - "/var/folders/"
-      # Node.js/npm関連
-      - "$HOME/.node/"
-      - "$HOME/.nvm/"
-      - "$HOME/.yarn/"
-      - "$HOME/.pnpm-store/"
-      # Python関連
-      - "$HOME/.pyenv/"
-      - "$HOME/.virtualenvs/"
-      - "$HOME/.poetry/"
-      - "$HOME/.ruff/"
-      - "$HOME/.uv/"
-      # Rust関連
-      - "$HOME/.cargo/"
-      - "$HOME/.rustup/"
-      # Git/開発ツール
-      - "$HOME/.ssh/"
-      - "$HOME/.gitconfig"
-      # AI/LLM関連ツール
-      - "$HOME/.config/mcp/"
-      - "$HOME/.continue/"
-      # macOS固有
-      - "$HOME/Library/Application Support/Code/"
-      - "$HOME/Library/Preferences/"
-      # Chrome/Chromium 実行ファイル
       - "/Applications/Google Chrome.app/"
       - "/Applications/Google Chrome Beta.app/"
       - "/Applications/Google Chrome Canary.app/"
       - "/Applications/Chromium.app/"
-      # Chrome GPU/Network プロセス用
       - "/System/Library/Extensions/"
       - "/System/Library/Frameworks/"
       - "/usr/lib/"
       - "/usr/libexec/"
       - "/private/var/db/"
       - "/Library/GPUBundles/"
-      - "$HOME/Library/Saved Application State/"
     allow-keychain: true
     allow-git: true
+
+# コマンドに応じて自動でプリセットを適用
+auto-presets:
+  # Claude Code
+  - command: claude
+    presets:
+      - claude-code
+
+  # Codex（claude-codeと同じ設定を使用）
+  - command: codex
+    presets:
+      - claude-code
+
+  # Node.js系
+  - command-pattern: ^(npm|npx|yarn|pnpm)$
+    presets:
+      - base
+      - npm
+
+  # Python系
+  - command-pattern: ^(python|python3|pip|pip3|poetry|uv)$
+    presets:
+      - base
+      - python
+
+  # Rust系
+  - command-pattern: ^(cargo|rustc|rustup)$
+    presets:
+      - base
+      - rust
+
+  # Git
+  - command: git
+    presets:
+      - base
+      - git
