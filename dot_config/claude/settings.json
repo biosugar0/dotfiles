@@ -14,14 +14,8 @@
     "RUST_LOG": "warn",
     "SHELL": "/bin/zsh"
   },
-  "attribution": {
-    "commits": "none",
-    "pullRequests": "none"
-  },
+  "attribution": {},
   "permissions": {
-    "additionalDirectories": [
-      "~/.config/claude/plans/"
-    ],
     "allow": [
       "mcp__gpt-5",
       "mcp__playwright",
@@ -123,26 +117,12 @@
       "Write(.env*)",
       "Write(**/secrets/**)"
     ],
-    "defaultMode": "acceptEdits"
-  },
-  "model": "opus",
-  "statusLine": {
-    "type": "command",
-    "command": "$HOME/.config/claude/hooks/cc-statusline.ts"
+    "defaultMode": "acceptEdits",
+    "additionalDirectories": [
+      "~/.config/claude/plans/"
+    ]
   },
   "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|MultiEdit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.config/claude/hooks/post-tool-use-eol.ts",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
     "SessionStart": [
       {
         "matcher": "startup|resume",
