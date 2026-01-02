@@ -43,6 +43,14 @@ if command -v ghq &>/dev/null; then
 	ln -sf "$HOME/ghq/github.com/coderabbitai/git-worktree-runner/bin/git-gtr" "$HOME/.local/bin/git-gtr"
 fi
 
+# editprompt (CLI tool for writing prompts in editor)
+if command -v npm &>/dev/null; then
+	if ! command -v editprompt &>/dev/null; then
+		echo "Installing editprompt..."
+		npm install -g editprompt
+	fi
+fi
+
 echo "=== Done! ==="
 echo "Run 'exec zsh' to reload shell"
 echo "Run 'prefix + I' in tmux to install plugins"
