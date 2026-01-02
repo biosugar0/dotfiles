@@ -90,3 +90,22 @@ api.nvim_create_autocmd("FileType", {
 	pattern = "*",
 	command = [[setlocal fo-=cro]],
 })
+
+-- :quit 時に特殊ウィンドウ (quickfix, help等) だけ残る問題を解決
+-- https://zenn.dev/vim_jp/articles/ff6cd224fab0c7
+api.nvim_create_autocmd("QuitPre", {
+	group = MyAutoCmd,
+	callback = function()
+		local current_win = api.nvim_get_current_win()
+		for _, win in ipairs(api.nvim_list_wins()) do
+			if win ~= current_win then
+				local buf = api.nvim_win_get_buf(win)
+				if bo[buf].buftype == "" then
+					return
+				end
+			end
+		end
+		vim.cmd.only({ bang = true })
+	end,
+	desc = "Close all special buffers and quit Neovim",
+})
