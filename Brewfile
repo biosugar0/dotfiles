@@ -4,6 +4,7 @@ tap "warashi/tap"
 # Core tools
 brew "chezmoi"
 brew "git"
+brew "git-delta"
 brew "gh"
 brew "ghq"
 brew "tree"
