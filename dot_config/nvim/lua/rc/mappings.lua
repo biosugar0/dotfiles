@@ -37,8 +37,9 @@ vim.keymap.set('n', '0', [[getline('.')[0 : col('.') - 2] =~# '^\s\+$' ? '0' : '
 -- macro playback
 vim.keymap.set('n', 'Q', '@a')
 
--- editprompt: バッファ内容を送信 (EDITPROMPT環境変数がある時のみ)
+-- editprompt: EDITPROMPT環境変数がある時のみ有効
 if vim.env.EDITPROMPT then
+  -- バッファ内容を送信
   vim.keymap.set('n', '<Space>x', function()
     vim.cmd('update')
     local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
@@ -54,4 +55,7 @@ if vim.env.EDITPROMPT then
       end)
     end)
   end, { desc = 'Send to editprompt' })
+
+  -- quote収集内容を挿入
+  vim.keymap.set('n', '<Space>d', '<Cmd>r !editprompt dump<CR>', { desc = 'Dump quotes' })
 end
