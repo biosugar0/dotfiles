@@ -20,12 +20,15 @@ local null_ls_formatting = function(bufnr)
   })
 end
 return {
-  -- Lua開発を強化するNeodevプラグイン
+  -- Lua開発を強化するLazydevプラグイン (neodevの後継)
   {
-    'folke/neodev.nvim',
-    config = function()
-      require('neodev').setup()
-    end,
+    'folke/lazydev.nvim',
+    ft = 'lua',
+    opts = {
+      library = {
+        { path = '${3rd}/luv/library', words = { 'vim%.uv' } },
+      },
+    },
   },
   -- SchemaStoreプラグインの追加
   {
@@ -39,15 +42,13 @@ return {
     dependencies = {
       { 'williamboman/mason-lspconfig.nvim' },
       { 'williamboman/mason.nvim' },
-      { 'folke/neodev.nvim' },
+      { 'folke/lazydev.nvim' },
       { 'b0o/schemastore.nvim' },
       { 'hrsh7th/cmp-nvim-lsp' },
       { 'j-hui/fidget.nvim' },
       { 'folke/trouble.nvim' },
     },
     config = function()
-      -- Neodevのセットアップ（最初に行う必要がある）
-      require('neodev').setup()
 
       -- Capabilitiesの設定
       local capabilities = vim.lsp.protocol.make_client_capabilities()
@@ -113,21 +114,20 @@ return {
       }
 
       -- 共通のon_attach関数
+      -- Neovim 0.11+ のデフォルトキーマップ:
+      -- grn: rename, gra: code_action, grr: references, gri: implementation
+      -- gO: document_symbol, K: hover, CTRL-S (insert): signature_help
       local on_attach = function(client, bufnr)
         if client.name == 'ts_ls' then
           client.server_capabilities.documentFormattingProvider = false
           client.server_capabilities.documentRangeFormattingProvider = false
         end
         local bufopts = { noremap = true, silent = true, buffer = bufnr }
+        -- カスタムキーマップ (デフォルトを補完)
         vim.keymap.set('n', 'gd', vim.lsp.buf.definition, bufopts)
-        vim.keymap.set('n', 'K', vim.lsp.buf.hover, bufopts)
-        vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, bufopts)
-        vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, bufopts)
-        vim.keymap.set('n', 'gr', vim.lsp.buf.rename, bufopts)
         vim.keymap.set('n', 'gD', vim.lsp.buf.references, bufopts)
         vim.keymap.set('n', '[d', vim.diagnostic.goto_prev, bufopts)
         vim.keymap.set('n', ']d', vim.diagnostic.goto_next, bufopts)
-        vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, bufopts)
 
         if is_null_ls_formatter_available(bufnr) then
           vim.keymap.set(
@@ -158,129 +158,71 @@ return {
         end, bufopts)
       end
 
-      -- 新しいvim.lsp.config() APIを使用してLSPサーバーを設定
-      vim.lsp.config('lua_ls', {
-        on_attach = on_attach,
-        capabilities = capabilities,
-        handlers = handlers,
-        settings = {
-          Lua = {
-            runtime = {
-              version = 'LuaJIT',
-              path = vim.split(package.path, ';'),
-            },
-            diagnostics = {
-              globals = { 'vim' },
-            },
-            workspace = {
-              library = vim.api.nvim_get_runtime_file('', true),
-              checkThirdParty = false,
-            },
-            telemetry = {
-              enable = false,
+      -- LSPサーバー設定 (Neovim 0.11+ vim.lsp.config/enable API)
+      local servers = {
+        lua_ls = {
+          settings = {
+            Lua = {
+              runtime = { version = 'LuaJIT' },
+              diagnostics = { globals = { 'vim' } },
+              workspace = { checkThirdParty = false },
+              telemetry = { enable = false },
             },
           },
         },
-      })
-
-      vim.lsp.config('gopls', {
-        on_attach = on_attach,
-        capabilities = capabilities,
-        handlers = handlers,
-        settings = {
-          gopls = {
-            usePlaceholders = true,
-            completeUnimported = true,
-            staticcheck = true,
-            analyses = {
-              unusedparams = true,
-              unreachable = true,
+        gopls = {
+          settings = {
+            gopls = {
+              usePlaceholders = true,
+              completeUnimported = true,
+              staticcheck = true,
+              analyses = { unusedparams = true, unreachable = true },
             },
           },
         },
-      })
-
-      vim.lsp.config('yamlls', {
-        on_attach = on_attach,
-        capabilities = capabilities,
-        handlers = handlers,
-        settings = {
-          yaml = {
-            keyOrdering = false,
-            schemas = require('schemastore').yaml.schemas(),
-          },
-        },
-      })
-
-      vim.lsp.config('pyright', {
-        on_attach = on_attach,
-        capabilities = capabilities,
-        handlers = handlers,
-        settings = {
-          python = {
-            analysis = {
-              autoSearchPaths = true,
-              useLibraryCodeForTypes = true,
-              diagnosticMode = 'workspace',
-              typeCheckingMode = 'off',
+        yamlls = {
+          settings = {
+            yaml = {
+              keyOrdering = false,
+              schemas = require('schemastore').yaml.schemas(),
             },
           },
         },
-      })
+        pyright = {
+          settings = {
+            python = {
+              analysis = {
+                autoSearchPaths = true,
+                useLibraryCodeForTypes = true,
+                diagnosticMode = 'workspace',
+                typeCheckingMode = 'off',
+              },
+            },
+          },
+        },
+        ts_ls = {},
+        bashls = {},
+        terraformls = {},
+        typos_lsp = {},
+        prismals = {},
+        graphql = {},
+      }
 
-      vim.lsp.config('ts_ls', {
-        on_attach = on_attach,
-        capabilities = capabilities,
-        handlers = handlers,
-      })
-
-      vim.lsp.config('bashls', {
-        on_attach = on_attach,
-        capabilities = capabilities,
-        handlers = handlers,
-      })
-
-      vim.lsp.config('terraformls', {
-        on_attach = on_attach,
-        capabilities = capabilities,
-        handlers = handlers,
-      })
-
-      vim.lsp.config('typos_lsp', {
-        on_attach = on_attach,
-        capabilities = capabilities,
-        handlers = handlers,
-      })
-
-      vim.lsp.config('prismals', {
-        on_attach = on_attach,
-        capabilities = capabilities,
-        handlers = handlers,
-      })
-
-      vim.lsp.config('graphql', {
-        on_attach = on_attach,
-        capabilities = capabilities,
-        handlers = handlers,
-      })
+      -- 共通設定を適用してLSPを有効化
+      for name, config in pairs(servers) do
+        config.on_attach = on_attach
+        config.capabilities = capabilities
+        config.handlers = handlers
+        vim.lsp.config(name, config)
+        vim.lsp.enable(name)
+      end
 
       -- Mason setup
       require('mason').setup()
 
-      -- Mason-lspconfig setup
+      -- Mason-lspconfig setup (Neovim 0.11+: automatic_enable がデフォルトで有効)
       require('mason-lspconfig').setup({
-        ensure_installed = {
-          'bashls',
-          'gopls',
-          'lua_ls',
-          'pyright',
-          'yamlls',
-          'ts_ls',
-          'terraformls',
-          'typos_lsp',
-          'prismals',
-          'graphql',
-        },
+        ensure_installed = vim.tbl_keys(servers),
       })
     end,
   },
@@ -288,9 +230,6 @@ return {
   {
     'williamboman/mason.nvim',
     build = ':MasonUpdate',
-    config = function()
-      require('mason').setup()
-    end,
   },
   {
     'williamboman/mason-lspconfig.nvim',
@@ -395,9 +334,9 @@ return {
       local sources = {
         { name = 'claude_slash', priority = 900 },
         { name = 'claude_at', priority = 900 },
+        { name = 'lazydev', group_index = 0 }, -- lazydev を優先 (Lua)
         { name = 'skkeleton' },
         { name = 'nvim_lsp' },
-        { name = 'nvim_lua', max_item_count = 20 },
         { name = 'nvim_lsp_signature_help' },
         { name = 'buffer' },
         { name = 'rg', keyword_length = 4, max_item_count = 10 },
@@ -472,6 +411,7 @@ return {
             ellipsis_char = '...',
             before = function(entry, vim_item)
               vim_item.menu = ({
+                lazydev = '[LazyDev]',
                 skkeleton = '[Skel]',
                 nvim_lsp = '[LSP]',
                 vsnip = '[Snippet]',
