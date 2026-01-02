@@ -20,6 +20,7 @@ $aws\
 $cmd_duration\
 $jobs\
 $battery\
+$status\
 $line_break\
 $character"""
 
@@ -108,9 +109,10 @@ style = "bold 105"
 format = "via [$symbol$workspace]($style) "
 
 [aws]
-format = '[$symbol($profile )]($style)'
+format = '[$symbol($profile )(\($duration\) )]($style)'
 symbol = ""
 style = "bold yellow"
+expiration_symbol = "⚠️"
 
 [cmd_duration]
 min_time = 5000
@@ -134,3 +136,16 @@ style = "red bold"
 [[battery.display]]
 threshold = 30
 style = "yellow"
+
+[status]
+disabled = false
+format = "[$symbol$status]($style) "
+symbol = "✘ "
+success_symbol = ""
+not_executable_symbol = "🚫"
+not_found_symbol = "🔍"
+sigint_symbol = "🧱"
+signal_symbol = "⚡"
+style = "bold red"
+map_symbol = true
+recognize_signal_code = true
