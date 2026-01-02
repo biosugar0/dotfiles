@@ -36,3 +36,22 @@ vim.keymap.set('n', '0', [[getline('.')[0 : col('.') - 2] =~# '^\s\+$' ? '0' : '
 
 -- macro playback
 vim.keymap.set('n', 'Q', '@a')
+
+-- editprompt: バッファ内容を送信 (EDITPROMPT環境変数がある時のみ)
+if vim.env.EDITPROMPT then
+  vim.keymap.set('n', '<Space>x', function()
+    vim.cmd('update')
+    local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+    local content = table.concat(lines, '\n')
+    vim.system({ 'editprompt', 'input', '--', content }, { text = true }, function(obj)
+      vim.schedule(function()
+        if obj.code == 0 then
+          vim.api.nvim_buf_set_lines(0, 0, -1, false, {})
+          vim.cmd('silent write')
+        else
+          vim.notify('editprompt failed: ' .. (obj.stderr or 'unknown error'), vim.log.levels.ERROR)
+        end
+      end)
+    end)
+  end, { desc = 'Send to editprompt' })
+end
