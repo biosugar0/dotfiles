@@ -201,6 +201,7 @@ return {
           },
         },
         ts_ls = {},
+        denols = {}, -- Deno/非Denoプロジェクトを自動検出 (nvim-lspconfig PR#4207)
         bashls = {},
         terraformls = {},
         typos_lsp = {},
