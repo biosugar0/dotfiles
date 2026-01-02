@@ -5,22 +5,22 @@ echo "=== dotfiles installer (chezmoi) ==="
 
 # Homebrew
 if ! command -v brew &>/dev/null; then
-  echo "Installing Homebrew..."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+	echo "Installing Homebrew..."
+	/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 fi
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
 # Brewfile
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [[ -f "$SCRIPT_DIR/Brewfile" ]]; then
-  echo "Installing packages from Brewfile..."
-  brew bundle --file="$SCRIPT_DIR/Brewfile"
+	echo "Installing packages from Brewfile..."
+	brew bundle --file="$SCRIPT_DIR/Brewfile"
 fi
 
 # chezmoi
 if ! command -v chezmoi &>/dev/null; then
-  echo "Installing chezmoi..."
-  brew install chezmoi
+	echo "Installing chezmoi..."
+	brew install chezmoi
 fi
 
 # Apply dotfiles
@@ -29,8 +29,18 @@ chezmoi init --source "$SCRIPT_DIR" --apply
 
 # tmux plugins (tpm)
 if [[ ! -d "$HOME/.config/tmux/plugins/tpm" ]]; then
-  echo "Installing tmux plugin manager..."
-  git clone https://github.com/tmux-plugins/tpm "$HOME/.config/tmux/plugins/tpm"
+	echo "Installing tmux plugin manager..."
+	git clone https://github.com/tmux-plugins/tpm "$HOME/.config/tmux/plugins/tpm"
+fi
+
+# git-worktree-runner (git gtr)
+if command -v ghq &>/dev/null; then
+	if [[ ! -d "$HOME/ghq/github.com/coderabbitai/git-worktree-runner" ]]; then
+		echo "Installing git-worktree-runner..."
+		ghq get coderabbitai/git-worktree-runner
+	fi
+	mkdir -p "$HOME/.local/bin"
+	ln -sf "$HOME/ghq/github.com/coderabbitai/git-worktree-runner/bin/git-gtr" "$HOME/.local/bin/git-gtr"
 fi
 
 echo "=== Done! ==="
