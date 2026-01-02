@@ -126,7 +126,23 @@
     "defaultMode": "acceptEdits"
   },
   "model": "opus",
+  "statusLine": {
+    "type": "command",
+    "command": "$HOME/.config/claude/hooks/cc-statusline.ts"
+  },
   "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/post-tool-use-eol.ts",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "matcher": "startup|resume",

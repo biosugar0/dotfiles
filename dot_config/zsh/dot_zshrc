@@ -28,12 +28,14 @@ alias pip=/opt/homebrew/bin/pip3
 # ----------------------------------------
 # 自動補完と提案を行うプラグイン（Gitの補完も強化）
 zplug "zsh-users/zsh-autosuggestions"
+ZSH_AUTOSUGGEST_USE_ASYNC=1
+ZSH_AUTOSUGGEST_CLEAR_WIDGETS+=(accept-line)
 
 # Zshの高機能補完を提供
 zplug "zsh-users/zsh-completions"
 
-# Zshのシンタックスハイライト（コマンドの色付け）
-zplug "zsh-users/zsh-syntax-highlighting"
+# Zshのシンタックスハイライト（高速版）
+zplug "zdharma-continuum/fast-syntax-highlighting"
 
 # Gitのステータス表示を強化するプラグイン
 zplug "olivierverdier/zsh-git-prompt"
@@ -103,7 +105,29 @@ bindkey '^I' expand-or-complete
 # ----------------------------------------
 # Functions
 # ----------------------------------------
-#
+
+# fancy-ctrl-z: Ctrl+Z でfg/bg切り替え
+fancy-ctrl-z() {
+  if [[ $#BUFFER -eq 0 ]]; then
+    BUFFER="fg"
+    zle accept-line
+  else
+    zle push-input
+    zle clear-screen
+  fi
+}
+zle -N fancy-ctrl-z
+bindkey '^Z' fancy-ctrl-z
+
+# show-buffer-stack: 入力途中のコマンドをスタック表示
+show-buffer-stack() {
+  POSTDISPLAY="
+stack: $LBUFFER"
+  zle push-line-or-edit
+}
+zle -N show-buffer-stack
+bindkey '^Q' show-buffer-stack
+
 function fe() {
   local files
   IFS=$'\n' files=($(fzf --preview "head -100 {}" --query="$1" --multi --select-1 --exit-0))
