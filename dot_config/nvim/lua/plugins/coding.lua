@@ -224,7 +224,23 @@ return {
         },
         vtsls = {
           settings = {
+            vtsls = {
+              autoUseWorkspaceTsdk = true,
+              experimental = {
+                completion = {
+                  enableServerSideFuzzyMatch = true,
+                  entriesLimit = 100,
+                },
+              },
+            },
             typescript = {
+              updateImportsOnFileMove = { enabled = 'always' },
+              suggest = {
+                completeFunctionCalls = true,
+              },
+              preferences = {
+                importModuleSpecifier = 'relative',
+              },
               inlayHints = {
                 parameterNames = { enabled = 'literals' },
                 parameterTypes = { enabled = true },
@@ -235,6 +251,13 @@ return {
               },
             },
             javascript = {
+              updateImportsOnFileMove = { enabled = 'always' },
+              suggest = {
+                completeFunctionCalls = true,
+              },
+              preferences = {
+                importModuleSpecifier = 'relative',
+              },
               inlayHints = {
                 parameterNames = { enabled = 'literals' },
                 parameterTypes = { enabled = true },
