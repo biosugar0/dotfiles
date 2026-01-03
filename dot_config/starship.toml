@@ -17,15 +17,27 @@ $lua\
 $python\
 $terraform\
 $aws\
-$cmd_duration\
 $jobs\
-$battery\
 $status\
+$fill\
+$cmd_duration\
+$battery\
+$time\
 $line_break\
 $character"""
 
 add_newline = true
 command_timeout = 500
+
+[fill]
+symbol = "·"
+style = "dim white"
+
+[time]
+disabled = false
+format = "[$time]($style)"
+style = "dim white"
+time_format = "%H:%M"
 
 [character]
 success_symbol = "[❯](bold green)"
