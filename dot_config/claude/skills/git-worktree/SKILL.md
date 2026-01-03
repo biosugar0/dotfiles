@@ -1,6 +1,8 @@
 ---
 name: git-worktree
-description: Git worktreeを使った並列開発を支援。別ブランチでテスト実行、PRレビュー用にコード取得、複数ブランチ間でコマンド実行が必要な場合に使用。git gtr run でworktree内コマンドを実行。
+description: |
+  Git worktreeを使った並列開発を支援。別ブランチでテスト実行、PRレビュー用にコード取得、複数ブランチ間でコマンド実行が必要な場合に使用。git gtr run でworktree内コマンドを実行。
+  自動発動条件: 「mainでテスト」「別ブランチで確認」「PR #XXX を見て」等の発言時
 ---
 
 # Git Worktree Manager (for Claude Code)
@@ -36,6 +38,9 @@ git gtr run 1 npm run build
 # worktree 作成
 git gtr new pr-review --from origin/feature-branch
 
+# 依存関係をインストール (Node.jsプロジェクトの場合)
+git gtr run pr-review npm ci
+
 # コード確認
 git gtr run pr-review cat src/main.ts
 git gtr run pr-review git diff main...HEAD --stat
@@ -44,25 +49,30 @@ git gtr run pr-review git diff main...HEAD --stat
 git gtr rm pr-review --yes
 ```
 
-### 3. 複数ブランチで並列テスト
+### 3. 複数ブランチで並列テスト (subagent活用)
+
+Taskツールで並列subagentを起動し、各worktreeでテストを実行:
 
 ```bash
-# 各ブランチ用の worktree
-git gtr new feature-a --from origin/feature-a
-git gtr new feature-b --from origin/feature-b
+# 各ブランチ用の worktree を作成
+git gtr new feature-a --from origin/feature-a --yes
+git gtr new feature-b --from origin/feature-b --yes
+```
 
-# 並列でテスト実行
-git gtr run feature-a npm test &
-git gtr run feature-b npm test &
-wait
+その後、Taskツールで2つの並列subagentを起動:
+- subagent A: `git gtr run feature-a npm ci && git gtr run feature-a npm test`
+- subagent B: `git gtr run feature-b npm ci && git gtr run feature-b npm test`
 
-# 結果を比較
+結果を集約して報告。完了後:
+```bash
+git gtr rm feature-a --yes
+git gtr rm feature-b --yes
 ```
 
 ### 4. 別ブランチでビルド確認
 
 ```bash
-git gtr new build-check --from main
+git gtr new build-check --from main --yes
 git gtr run build-check npm ci
 git gtr run build-check npm run build
 git gtr rm build-check --yes
@@ -129,5 +139,6 @@ git gtr run feature git diff
 
 - worktree は `.git` を共有するため、コミットは即座に反映される
 - `git gtr run` は worktree ディレクトリで `cd` してからコマンドを実行する
-- worktree 作成時に依存関係は自動インストールされない (hooks で設定可能)
+- **worktree 作成後は依存関係インストールが必要** (`npm ci`, `bundle install` 等)
 - 作業完了後は `git gtr rm` でクリーンアップ推奨
+- 並列テストはTaskツールでsubagentを使うとClaude Codeらしい実装になる
