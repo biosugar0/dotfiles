@@ -116,7 +116,7 @@ style = "bold yellow"
 expiration_symbol = "⚠️"
 
 [cmd_duration]
-min_time = 5000
+min_time = 3000
 format = "[$duration]($style) "
 style = "yellow bold"
 show_notifications = true
