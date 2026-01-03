@@ -67,18 +67,18 @@ tag_symbol = " 🏷 "
 style = "bold yellow"
 
 [git_status]
-format = '([\[$all_status$ahead_behind\]]($style) )'
-style = "red bold"
-stashed = '\$'
-ahead = "⇡"
-behind = "⇣"
-diverged = "⇕"
-conflicted = "="
-deleted = "✘"
-renamed = "»"
-modified = "!"
-staged = "+"
-untracked = "?"
+format = '( $all_status$ahead_behind)'
+style = "bright-green"
+staged = "[󰐗 ](bright-green)"
+modified = "[󰏫 ](bright-green)"
+untracked = "[󰐕 ](bright-green)"
+deleted = "[󰍴 ](bright-green)"
+stashed = "[󰆓 ](bright-green)"
+renamed = "[󰑐 ](bright-green)"
+conflicted = "[󰀨 ](bright-green)"
+ahead = "[󰞙 ](bright-green)"
+behind = "[󰞒 ](bright-green)"
+diverged = "[󰹹 ](bright-green)"
 
 [git_metrics]
 disabled = false
