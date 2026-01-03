@@ -28,8 +28,11 @@ wezterm.on('gui-startup', function(cmd)
   window:gui_window():toggle_fullscreen()
 end)
 
--- フォントの設定
-config.font = wezterm.font('Monaspace Neon')
+-- フォントの設定 (Nerd Font fallback)
+config.font = wezterm.font_with_fallback({
+  'Monaspace Neon',
+  'Hack Nerd Font',
+})
 config.font_size = 15.0
 
 -- colors
