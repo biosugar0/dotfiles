@@ -36,7 +36,8 @@ vimcmd_replace_symbol = "[❮](bold purple)"
 
 [directory]
 truncation_length = 3
-truncate_to_repo = true
+truncate_to_repo = false
+fish_style_pwd_dir_length = 1
 style = "cyan bold"
 read_only = "🔒"
 
