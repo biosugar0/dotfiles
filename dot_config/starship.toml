@@ -30,7 +30,7 @@ add_newline = true
 command_timeout = 500
 
 [fill]
-symbol = "·"
+symbol = "─"
 style = "dim white"
 
 [time]
