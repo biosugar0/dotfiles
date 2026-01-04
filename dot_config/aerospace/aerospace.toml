@@ -1,0 +1,149 @@
+# AeroSpace configuration
+# Reference: https://nikitabobko.github.io/AeroSpace/guide
+
+# ログイン時に起動
+start-at-login = true
+
+# 起動後にJankyBordersを起動
+after-startup-command = ['exec-and-forget borders']
+
+# 正規化設定
+enable-normalization-flatten-containers = true
+enable-normalization-opposite-orientation-for-nested-containers = true
+
+# アコーディオンレイアウトのパディング
+accordion-padding = 30
+
+# デフォルトレイアウト: tiles (タイル表示) or accordion (重ねて表示)
+# 初めは accordion が違和感少ない。慣れたら tiles に変更推奨
+default-root-container-layout = 'accordion'
+
+# デフォルトの向き: horizontal, vertical, auto
+default-root-container-orientation = 'auto'
+
+# モニター変更時にマウスを追従
+on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
+
+# cmd-hでアプリを隠す機能を無効化するか
+automatically-unhide-macos-hidden-apps = false
+
+# キーマッピング
+[key-mapping]
+preset = 'qwerty'
+
+# ウィンドウ間のギャップ
+[gaps]
+inner.horizontal = 8
+inner.vertical = 8
+outer.left = 8
+outer.bottom = 8
+outer.top = 8
+outer.right = 8
+
+# メインモード
+[mode.main.binding]
+
+# レイアウト切り替え
+# alt + / : タイルレイアウト (horizontal/vertical切り替え)
+# alt + , : アコーディオンレイアウト (horizontal/vertical切り替え)
+alt-slash = 'layout tiles horizontal vertical'
+alt-comma = 'layout accordion horizontal vertical'
+
+# フォーカス移動 (vim風)
+alt-h = 'focus left'
+alt-j = 'focus down'
+alt-k = 'focus up'
+alt-l = 'focus right'
+
+# ウィンドウ移動
+alt-shift-h = 'move left'
+alt-shift-j = 'move down'
+alt-shift-k = 'move up'
+alt-shift-l = 'move right'
+
+# ウィンドウリサイズ
+alt-minus = 'resize smart -50'
+alt-shift-minus = 'resize smart +50'
+
+# ワークスペース切り替え
+alt-1 = 'workspace 1'
+alt-2 = 'workspace 2'
+alt-3 = 'workspace 3'
+alt-4 = 'workspace 4'
+alt-5 = 'workspace 5'
+alt-6 = 'workspace 6'
+alt-7 = 'workspace 7'
+alt-8 = 'workspace 8'
+alt-9 = 'workspace 9'
+
+# アプリ用ワークスペース
+alt-w = 'workspace W' # Web browser
+alt-t = 'workspace T' # Terminal
+alt-c = 'workspace C' # Communication (Slack等)
+alt-n = 'workspace N' # Notes
+alt-e = 'workspace E' # Editor
+
+# ウィンドウをワークスペースに移動
+alt-shift-1 = 'move-node-to-workspace 1'
+alt-shift-2 = 'move-node-to-workspace 2'
+alt-shift-3 = 'move-node-to-workspace 3'
+alt-shift-4 = 'move-node-to-workspace 4'
+alt-shift-5 = 'move-node-to-workspace 5'
+alt-shift-6 = 'move-node-to-workspace 6'
+alt-shift-7 = 'move-node-to-workspace 7'
+alt-shift-8 = 'move-node-to-workspace 8'
+alt-shift-9 = 'move-node-to-workspace 9'
+
+alt-shift-w = 'move-node-to-workspace W'
+alt-shift-t = 'move-node-to-workspace T'
+alt-shift-c = 'move-node-to-workspace C'
+alt-shift-n = 'move-node-to-workspace N'
+alt-shift-e = 'move-node-to-workspace E'
+
+# ワークスペース間移動
+alt-tab = 'workspace-back-and-forth'
+alt-shift-tab = 'move-workspace-to-monitor --wrap-around next'
+
+# サービスモード切り替え
+alt-shift-semicolon = 'mode service'
+
+# サービスモード
+[mode.service.binding]
+esc = ['reload-config', 'mode main']
+r = ['flatten-workspace-tree', 'mode main'] # レイアウトリセット
+f = ['layout floating tiling', 'mode main'] # floating/tiling切り替え
+backspace = ['close-all-windows-but-current', 'mode main']
+
+alt-shift-h = ['join-with left', 'mode main']
+alt-shift-j = ['join-with down', 'mode main']
+alt-shift-k = ['join-with up', 'mode main']
+alt-shift-l = ['join-with right', 'mode main']
+
+# アプリごとのワークスペース割り当て
+[[on-window-detected]]
+if.app-id = 'com.apple.finder'
+run = 'layout floating'
+
+[[on-window-detected]]
+if.app-id = 'com.mitchellh.ghostty'
+run = 'move-node-to-workspace T'
+
+[[on-window-detected]]
+if.app-id = 'com.github.wez.wezterm'
+run = 'move-node-to-workspace T'
+
+[[on-window-detected]]
+if.app-id = 'company.thebrowser.Browser'
+run = 'move-node-to-workspace W'
+
+[[on-window-detected]]
+if.app-id = 'com.google.Chrome'
+run = 'move-node-to-workspace W'
+
+[[on-window-detected]]
+if.app-id = 'com.tinyspeck.slackmacgap'
+run = 'move-node-to-workspace C'
+
+[[on-window-detected]]
+if.app-id = 'notion.id'
+run = 'move-node-to-workspace N'
