@@ -40,6 +40,14 @@ outer.bottom = 8
 outer.top = 8
 outer.right = 8
 
+# ワークスペースのモニター割り当て
+# 外部モニタがない場合は自動的にメインモニタにフォールバック
+[workspace-to-monitor-force-assignment]
+T = 'secondary'  # Terminal → 外部モニタ
+W = 'secondary'  # Web → 外部モニタ
+C = 'main'       # Communication → 本体
+N = 'main'       # Notes → 本体
+
 # メインモード
 [mode.main.binding]
 
