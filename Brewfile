@@ -1,4 +1,6 @@
 tap "aquaproj/aqua"
+tap "felixkratz/formulae"
+tap "nikitabobko/tap"
 tap "warashi/tap"
 
 # Core tools
@@ -12,6 +14,7 @@ brew "wget"
 
 # Shell & Terminal
 brew "bat"
+brew "felixkratz/formulae/borders"
 brew "eza"
 brew "fd"
 brew "fzf"
@@ -58,6 +61,7 @@ brew "tflint"
 
 # Casks - Apps
 cask "1password-cli"
+cask "nikitabobko/tap/aerospace"
 cask "chatgpt"
 cask "docker-desktop"
 cask "drawio"
