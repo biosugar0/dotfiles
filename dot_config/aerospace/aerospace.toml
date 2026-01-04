@@ -47,6 +47,7 @@ T = 'secondary'  # Terminal → 外部モニタ
 W = 'secondary'  # Web → 外部モニタ
 C = 'main'       # Communication → 本体
 N = 'main'       # Notes → 本体
+Z = 'main'       # Zoom → 本体
 
 # メインモード
 [mode.main.binding]
@@ -90,6 +91,7 @@ alt-t = 'workspace T' # Terminal
 alt-c = 'workspace C' # Communication (Slack等)
 alt-n = 'workspace N' # Notes
 alt-e = 'workspace E' # Editor
+alt-z = 'workspace Z' # Zoom
 
 # ウィンドウをワークスペースに移動
 alt-shift-1 = 'move-node-to-workspace 1'
@@ -107,6 +109,7 @@ alt-shift-t = 'move-node-to-workspace T'
 alt-shift-c = 'move-node-to-workspace C'
 alt-shift-n = 'move-node-to-workspace N'
 alt-shift-e = 'move-node-to-workspace E'
+alt-shift-z = 'move-node-to-workspace Z'
 
 # ワークスペース間移動
 alt-tab = 'workspace-back-and-forth'
@@ -151,3 +154,7 @@ run = 'move-node-to-workspace C'
 [[on-window-detected]]
 if.app-id = 'notion.id'
 run = 'move-node-to-workspace N'
+
+[[on-window-detected]]
+if.app-id = 'us.zoom.xos'
+run = 'move-node-to-workspace Z'
