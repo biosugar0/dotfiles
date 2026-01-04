@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# JankyBorders configuration
+# Reference: https://github.com/FelixKratz/JankyBorders
+
+options=(
+  style=round
+  width=4.0
+  hidpi=on
+  # iceberg風カラー
+  active_color=0xff89b8c2   # iceberg cyan (アクティブ)
+  inactive_color=0x40444b6a # 薄い紫 (非アクティブ)
+)
+
+borders "${options[@]}"
