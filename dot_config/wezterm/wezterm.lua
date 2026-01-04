@@ -21,13 +21,6 @@ config.use_dead_keys = false
 config.front_end = 'WebGpu'
 config.adjust_window_size_when_changing_font_size = true
 
--- 最初からフルスクリーンで起動
-local mux = wezterm.mux
-wezterm.on('gui-startup', function(cmd)
-  local tab, pane, window = mux.spawn_window(cmd or {})
-  window:gui_window():toggle_fullscreen()
-end)
-
 -- フォントの設定 (Nerd Font fallback)
 config.font = wezterm.font_with_fallback({
   'Monaspace Neon',
@@ -52,7 +45,6 @@ local keybind = require('keybinds')
 config.keys = keybind.keys
 config.key_tables = keybind.key_tables
 
-config.leader = { key = 'LeftAlt', mods = 'NONE' }
 config.hide_tab_bar_if_only_one_tab = true
 config.use_fancy_tab_bar = false
 -- padding 0
@@ -70,73 +62,6 @@ config.colors = {
 config.window_background_opacity = 0.85
 config.text_background_opacity = 0.9
 config.macos_window_background_blur = 10
-
--- ウィンドウ中央配置
-if wezterm.gui then
-  local function normalize_window(window)
-    if not window then
-      return nil
-    end
-    if window.gui_window then
-      local ok, gui_window = pcall(function()
-        return window:gui_window()
-      end)
-      if ok and gui_window then
-        window = gui_window
-      end
-    end
-    if not window.get_dimensions then
-      return nil
-    end
-    return window
-  end
-
-  local function center_on_main_display(window, attempt)
-    attempt = attempt or 1
-    if attempt > 6 then
-      return
-    end
-
-    window = normalize_window(window)
-    if not window then
-      return
-    end
-
-    local screens = wezterm.gui.screens()
-    if not screens then
-      return
-    end
-
-    local main_screen = screens.main or screens.active
-    if not main_screen then
-      return
-    end
-
-    local dimensions = window:get_dimensions()
-    if not dimensions or dimensions.is_full_screen then
-      wezterm.time.call_after(0.1 * attempt, function()
-        center_on_main_display(window, attempt + 1)
-      end)
-      return
-    end
-
-    if dimensions.pixel_width > 0 and dimensions.pixel_height > 0 then
-      local centered_x = main_screen.x + math.floor((main_screen.width - dimensions.pixel_width) / 2)
-      local centered_y = main_screen.y + math.floor((main_screen.height - dimensions.pixel_height) / 2)
-      window:set_position(centered_x, centered_y)
-    end
-
-    if attempt < 6 then
-      wezterm.time.call_after(0.1 * attempt, function()
-        center_on_main_display(window, attempt + 1)
-      end)
-    end
-  end
-
-  wezterm.on('window-config-reloaded', function(window, _)
-    center_on_main_display(window)
-  end)
-end
 
 -- 設定を wezterm に返す
 return config
