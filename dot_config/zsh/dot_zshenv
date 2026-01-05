@@ -15,8 +15,8 @@ export PATH=${HOME}/.local/bin:$PATH
 export PATH="/usr/local/sbin:$PATH"
 
 # aqua - CLI version manager
+# PATH is set in .zshrc after brew shellenv to take precedence
 export AQUA_ROOT_DIR="${XDG_DATA_HOME}/aquaproj-aqua"
-export PATH="${AQUA_ROOT_DIR}/bin:$PATH"
 
 # lang
 export LANGUAGE="en_US.UTF-8"
