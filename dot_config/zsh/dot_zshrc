@@ -217,4 +217,8 @@ if [ -f ~/.zshrc.local ]; then
 fi
 
 export PATH="/opt/homebrew/opt/curl/bin:$PATH"
+
+# aqua - must be after brew shellenv to take precedence
+export PATH="${AQUA_ROOT_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/aquaproj-aqua}/bin:$PATH"
+
 eval "$(starship init zsh)"
