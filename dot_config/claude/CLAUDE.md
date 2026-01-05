@@ -1,3 +1,8 @@
+## Claude Code 設定ファイルの場所
+
+Claude Codeの設定は `$XDG_CONFIG_HOME/claude/` (通常 `~/.config/claude/`) に配置。
+このファイル自体も chezmoi で管理されている。
+
 ## 計画・Specファイル（全プロジェクト共通）
 
 すべての計画・specは `~/.config/claude/plans/` に保存。
