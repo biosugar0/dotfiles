@@ -1,8 +1,17 @@
 ---
 name: git-worktree
 description: |
-  Git worktreeを使った並列開発を支援。別ブランチでテスト実行、PRレビュー用にコード取得、複数ブランチ間でコマンド実行が必要な場合に使用。git gtr run でworktree内コマンドを実行。
-  自動発動条件: 「mainでテスト」「別ブランチで確認」「PR #XXX を見て」等の発言時
+  Git worktreeを使った並列開発を支援。git gtr コマンドで worktree 操作を行う。
+
+  【必須発動キーワード】以下を含む発言時は必ずこのスキルを呼び出すこと:
+  - 「worktree」「ワークツリー」
+  - 「別ブランチで作業」「別リポジトリで」
+  - 「mainでテスト」「mainで確認」「mainでビルド」
+  - 「PR #XXX を見て」「PRのコードを確認」
+  - 「並列でテスト」「複数ブランチで」
+  - 「git gtr」
+
+  重要: git worktree コマンドではなく git gtr コマンドを使用すること。
 ---
 
 # Git Worktree Manager (for Claude Code)
