@@ -14,7 +14,10 @@
     "RUST_LOG": "warn",
     "SHELL": "/bin/zsh"
   },
-  "attribution": {},
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
   "permissions": {
     "allow": [
       "mcp__gpt-5",
