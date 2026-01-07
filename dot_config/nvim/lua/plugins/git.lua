@@ -186,16 +186,10 @@ return {
       -- Gin specific configurations
       vim.g.gin_proxy_apply_without_confirm = true -- 確認なしで変更を適用
 
-      -- Diff: deltaプロセッサ + diffjump/difffold
+      -- Diff: deltaプロセッサ
       vim.g.gin_diff_default_args = {
         '++processor=delta --diff-highlight --keep-plus-minus-markers',
       }
-      vim.g.gin_diff_persistent_args = {
-        '++diffjump',
-        '++difffold',
-      }
-      -- Nerd Fontアイコンでdifffold表示
-      vim.g.gin_difffold_prefixes = vim.g['gin#difffold#prefixes_nerdfont']
 
       -- Branch
       vim.g.gin_branch_default_args = { '--all', '--sort=-committerdate' }
