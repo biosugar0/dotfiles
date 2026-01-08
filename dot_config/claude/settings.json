@@ -239,5 +239,6 @@
     "type": "command",
     "command": "~/ghq/github.com/biosugar0/dotfiles/bin/cc-statusline.ts"
   },
-  "alwaysThinkingEnabled": true
+  "alwaysThinkingEnabled": true,
+  "language": "Japanese"
 }
