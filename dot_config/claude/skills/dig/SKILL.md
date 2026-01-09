@@ -1,17 +1,19 @@
 ---
-description: Specやプランの曖昧点を構造化質問で明確化。「曖昧点を整理」「詳細を詰めて」「planの不明点を確認」で自動発動。
+name: dig
+description: Spec/planの曖昧点を構造化質問で明確化し、意思決定をプランへ反映する。曖昧点整理、詳細詰め、要件確認、仕様の不明点洗い出し、planの確認で自動発動。
 allowed-tools:
-  - Write
-  - Edit
   - Read
   - Grep
   - Glob
+  - Write
+  - Edit
   - TodoRead
   - TodoWrite
   - AskUserQuestion
+user-invocable: false
 ---
 
-プランファイルを読み、AskUserQuestionToolで詳細なインタビューを実施。
+プランファイルを読み、AskUserQuestionで詳細なインタビューを実施。
 
 ## 対象
 - Product Spec
@@ -26,7 +28,7 @@ allowed-tools:
 3. **決定の適用** - 回答をプランに反映
 4. **サマリー表示** - 決定事項を一覧化
 
-フェーズ3の後、再度プランを分析し、未解決の曖昧点があればフェーズ2に戻る。
+フェーズ3の後、再度プランを分析し、未解決の曖昧点があればフェーズ2に戻る（最大2回まで）。
 
 ## 質問ルール
 
