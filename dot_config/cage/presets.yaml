@@ -109,6 +109,7 @@ presets:
       - "$HOME/.codex/"
       - "$HOME/.serena/"
       - "$HOME/.config/mcp/"
+      - "$HOME/.config/chezmoi/"
       - "$HOME/.continue/"
       - "$HOME/ghq/github.com/"
       - "$HOME/Library/Application Support/Code/"
