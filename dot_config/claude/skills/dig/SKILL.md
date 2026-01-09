@@ -13,7 +13,7 @@ allowed-tools:
 user-invocable: false
 ---
 
-プランファイルを読み、AskUserQuestionで詳細なインタビューを実施。
+planファイルを読み、AskUserQuestionで詳細なインタビューを実施。
 
 ## 対象
 - Product Spec
