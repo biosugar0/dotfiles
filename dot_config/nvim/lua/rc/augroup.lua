@@ -6,18 +6,19 @@ local bo = vim.bo
 
 local MyAutoCmd = api.nvim_create_augroup("MyAutoCmd", { clear = true })
 
-local ftdetect_event = { "FileType", "Syntax", "BufNewFile", "BufNew", "BufRead" }
-api.nvim_create_autocmd(ftdetect_event, {
+-- ai-review filetype を登録
+vim.filetype.add({
+	pattern = {
+		["ai%-review.*"] = "ai-review",
+	},
+})
+
+-- gina-commit, ai-review を buflisted にする
+api.nvim_create_autocmd("FileType", {
 	group = MyAutoCmd,
-	pattern = "*",
+	pattern = { "gina-commit", "ai-review" },
 	callback = function()
-		api.nvim_command("filetype detect")
-		if bo.filetype == "gina-commit" or bo.filetype == "ai-review" then
-			bo.buflisted = true
-		end
-		if fn.match(fn.expand("%"), "ai-review") == 0 then
-			bo.filetype = "ai-review"
-		end
+		bo.buflisted = true
 	end,
 })
 
