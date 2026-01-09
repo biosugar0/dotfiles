@@ -1,5 +1,5 @@
 ---
-description: プランの曖昧点を構造化質問で明確化する
+description: Specやプランの曖昧点を構造化質問で明確化。「曖昧点を整理」「詳細を詰めて」「planの不明点を確認」で自動発動。
 allowed-tools:
   - Write
   - Edit
