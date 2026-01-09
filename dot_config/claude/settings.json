@@ -250,6 +250,10 @@
       }
     ]
   },
+  "statusLine": {
+    "type": "command",
+    "command": "~/ghq/github.com/biosugar0/dotfiles/bin/cc-statusline.ts"
+  },
   "enabledPlugins": {
     "document-skills@anthropic-agent-skills": true,
     "code-simplifier@claude-plugins-official": true,
@@ -265,10 +269,6 @@
       }
     }
   },
-  "statusLine": {
-    "type": "command",
-    "command": "~/ghq/github.com/biosugar0/dotfiles/bin/cc-statusline.ts"
-  },
-  "alwaysThinkingEnabled": true,
-  "language": "Japanese"
+  "language": "Japanese",
+  "alwaysThinkingEnabled": true
 }
