@@ -15,7 +15,8 @@ Claude Codeの設定は `$XDG_CONFIG_HOME/claude/` (通常 `~/.config/claude/`) 
 
 ## 調査など
 
-Serena MCPを活用する。
+- **探索・参照検索**: Claude Code LSP（軽量、トークン効率良い）
+- **シンボルベース編集・リファクタリング**: Serena MCP
 
 ## 作業方針
 
