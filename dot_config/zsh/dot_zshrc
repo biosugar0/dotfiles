@@ -15,10 +15,8 @@ alias time='gtime'
 alias la='ls -la'
 alias awk='gawk'
 alias killclaude='pkill -f -i claude'
-#alias claude='cage --preset claude-code -- claude --dangerously-skip-permissions --append-system-prompt "$(uvx --from git+https://github.com/oraios/serena serena print-system-prompt)"'
-alias claude='claude --dangerously-skip-permissions --mcp-config $XDG_CONFIG_HOME/claude/mcp.json --append-system-prompt "$(uvx --from git+https://github.com/oraios/serena serena print-system-prompt)"'
-
-#alias codex='cage --preset codex -- codex --dangerously-bypass-approvals-and-sandbox'
+alias claude='cage -- claude --dangerously-skip-permissions --mcp-config $XDG_CONFIG_HOME/claude/mcp.json'
+alias codex='cage -- codex --dangerously-bypass-approvals-and-sandbox'
 alias difit='npx difit'
 alias python=/opt/homebrew/bin/python3
 alias pip=/opt/homebrew/bin/pip3
