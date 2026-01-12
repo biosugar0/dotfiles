@@ -74,6 +74,25 @@ presets:
       - "/private/var/db/"
       - "/Library/GPUBundles/"
 
+  # draw.io（Electronアプリ）
+  drawio:
+    allow:
+      - "/Applications/draw.io.app/"
+      - "/opt/homebrew/Caskroom/drawio/"
+      - "$HOME/Library/Application Support/draw.io/"
+      - "$HOME/Library/Caches/draw.io/"
+      - "$HOME/Library/Preferences/com.jgraph.drawio.desktop.plist"
+      - "/System/Library/Extensions/"
+      - "/System/Library/Frameworks/"
+      - "/System/Library/PrivateFrameworks/"
+      - "/usr/lib/"
+      - "/usr/libexec/"
+      - "/private/var/db/"
+      - "/Library/GPUBundles/"
+      - "/System/Library/Components/"
+      - "/private/var/run/mDNSResponder"
+      - "/private/etc/hosts"
+
   # AI/LLMツール共通
   ai-tools:
     allow:
@@ -189,3 +208,9 @@ auto-presets:
     presets:
       - base
       - git
+
+  # draw.io
+  - command: drawio
+    presets:
+      - base
+      - drawio
