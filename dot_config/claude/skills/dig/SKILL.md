@@ -10,7 +10,7 @@ allowed-tools:
   - TodoRead
   - TodoWrite
   - AskUserQuestion
-user-invocable: false
+user-invocable: true
 ---
 
 planファイルを読み、AskUserQuestionで詳細なインタビューを実施。
