@@ -43,85 +43,53 @@ async function getGitBranch(): Promise<string> {
   return "";
 }
 
-function getTokenCount(transcriptPath: string | null): string {
-  if (!transcriptPath) {
-    return "_ tkns. (%)";
+interface StatusLineInput {
+  model?: { display_name?: string };
+  workspace?: { current_dir?: string };
+  context_window?: {
+    used_percentage?: number;
+    remaining_percentage?: number;
+  };
+}
+
+function formatContextUsage(input: StatusLineInput): string {
+  const contextWindow = input.context_window;
+
+  if (!contextWindow || contextWindow.used_percentage === undefined) {
+    return "_ (%)";
   }
 
-  try {
-    const content = Deno.readTextFileSync(transcriptPath);
-    const lines = content.split("\n").slice(-100);
+  const usedPct = Math.round(contextWindow.used_percentage);
 
-    let totalTokens = 0;
-    let foundUsage = false;
-
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i];
-      if (!line.trim()) continue;
-
-      try {
-        const data = JSON.parse(line);
-        if (data.type === "assistant" && data.message?.usage) {
-          const usage = data.message.usage;
-          totalTokens = (usage.input_tokens || 0) +
-            (usage.output_tokens || 0) +
-            (usage.cache_creation_input_tokens || 0) +
-            (usage.cache_read_input_tokens || 0);
-          foundUsage = true;
-          break;
-        }
-      } catch {
-        // ignore parse errors
-      }
-    }
-
-    if (!foundUsage) {
-      return "_ tkns. (%)";
-    }
-
-    const COMPACTION_THRESHOLD = 160000;
-    const percentage = Math.floor((totalTokens * 100) / COMPACTION_THRESHOLD);
-
-    let tokenDisplay: string;
-    if (totalTokens >= 1000) {
-      tokenDisplay = `${(totalTokens / 1000).toFixed(1)}K`;
-    } else {
-      tokenDisplay = totalTokens.toString();
-    }
-
-    let color: string;
-    if (percentage >= 90) {
-      color = "\x1b[31m"; // red
-    } else if (percentage >= 70) {
-      color = "\x1b[33m"; // yellow
-    } else {
-      color = "\x1b[32m"; // green
-    }
-
-    return `${tokenDisplay} tkns. (${color}${percentage}%\x1b[0m)`;
-  } catch {
-    return "_ tkns. (%)";
+  let color: string;
+  if (usedPct >= 90) {
+    color = "\x1b[31m"; // red
+  } else if (usedPct >= 70) {
+    color = "\x1b[33m"; // yellow
+  } else {
+    color = "\x1b[32m"; // green
   }
+
+  return `${color}${usedPct}%\x1b[0m`;
 }
 
 async function main() {
   const stdin = await readAll(Deno.stdin);
-  const input = JSON.parse(new TextDecoder().decode(stdin));
+  const input: StatusLineInput = JSON.parse(new TextDecoder().decode(stdin));
 
   const modelDisplay = input.model?.display_name || "Unknown";
   const currentDir = input.workspace?.current_dir || ".";
-  const transcriptPath = input.transcript_path || null;
 
   const dirName = currentDir.split("/").pop() || currentDir;
 
   const gitBranch = await getGitBranch();
-  const tokenCount = getTokenCount(transcriptPath);
+  const contextUsage = formatContextUsage(input);
 
   const parts = [`󰚩  ${modelDisplay}`, `  ${dirName}`];
   if (gitBranch) {
     parts.push(`󰘬  ${gitBranch}`);
   }
-  parts.push(`  ${tokenCount}`);
+  parts.push(`  ${contextUsage}`);
 
   console.log(parts.join(" | "));
 }
