@@ -38,15 +38,20 @@ output_context() {
     fi
 
     # 3. Check for recent session handoff files (ai/log/sessions/)
+    # Git情報は上で取得済みのため、会話分析部分のみ抽出
     if [ -d "$CLAUDE_PROJECT_DIR/ai/log/sessions" ]; then
         LATEST_SESSION=$(ls -t "$CLAUDE_PROJECT_DIR/ai/log/sessions/"*.md 2>/dev/null | head -1)
         if [ -n "$LATEST_SESSION" ]; then
-            context+="## Latest Session Handoff\n"
+            context+="## Previous Session Summary\n"
             context+="File: $(basename "$LATEST_SESSION")\n"
-            # Extract key sections
-            context+="\`\`\`\n"
-            head -50 "$LATEST_SESSION" 2>/dev/null
-            context+="\`\`\`\n\n"
+            # "## Conversation Analysis" セクションのみ抽出（Git情報重複排除）
+            CONV_ANALYSIS=$(sed -n '/^## Conversation Analysis/,/^---/p' "$LATEST_SESSION" 2>/dev/null | head -30)
+            if [ -n "$CONV_ANALYSIS" ]; then
+                context+="\`\`\`\n"
+                echo "$CONV_ANALYSIS"
+                context+="\`\`\`\n"
+            fi
+            context+="\n"
         fi
     fi
 
