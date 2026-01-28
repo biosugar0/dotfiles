@@ -1,5 +1,8 @@
 ---
+name: deslop
 description: AIが生成した余計なコード（slop）を現在のブランチから削除
+context: fork
+user-invocable: true
 ---
 
 # AI Code Slop 削除
