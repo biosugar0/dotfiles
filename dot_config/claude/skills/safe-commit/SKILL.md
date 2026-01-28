@@ -1,6 +1,7 @@
 ---
 name: safe-commit
 description: git commit を行う際に自動発動。禁止ディレクトリ（ai/, .serena/）のコミット防止と、論理的なコミット分割を支援する。
+context: fork
 ---
 
 # Safe Commit

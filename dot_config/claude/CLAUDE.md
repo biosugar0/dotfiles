@@ -42,7 +42,7 @@ Fetchする際にはfetch MCP, もしくはreadability MCPを使用する。
 
 ## 変更後のチェック
 
-コードを変更後にはci-quality-checker agentによるチェックを行う。
+コード変更後は `ci-quality-check` skill が自動発動し、フォークされたcontextでCI品質チェックを実行する。
 
 ## PRの作成
 
