@@ -26,7 +26,7 @@ output_context() {
         # Recent commits
         context+="\n### Recent commits (last 5):\n"
         context+="\`\`\`\n"
-        git log --oneline -5 2>/dev/null || echo "No commits"
+        context+="$(git log --oneline -5 2>/dev/null || echo 'No commits')\n"
         context+="\`\`\`\n"
 
         # Uncommitted changes summary
@@ -38,7 +38,6 @@ output_context() {
     fi
 
     # 3. Check for recent session handoff files (ai/log/sessions/)
-    # Git情報は上で取得済みのため、会話分析部分のみ抽出
     if [ -d "$CLAUDE_PROJECT_DIR/ai/log/sessions" ]; then
         LATEST_SESSION=$(ls -t "$CLAUDE_PROJECT_DIR/ai/log/sessions/"*.md 2>/dev/null | head -1)
         if [ -n "$LATEST_SESSION" ]; then
@@ -48,7 +47,7 @@ output_context() {
             CONV_ANALYSIS=$(sed -n '/^## Conversation Analysis/,/^---/p' "$LATEST_SESSION" 2>/dev/null | head -30)
             if [ -n "$CONV_ANALYSIS" ]; then
                 context+="\`\`\`\n"
-                echo "$CONV_ANALYSIS"
+                context+="$CONV_ANALYSIS\n"
                 context+="\`\`\`\n"
             fi
             context+="\n"
@@ -63,7 +62,7 @@ output_context() {
             context+="Incomplete features: $INCOMPLETE\n"
             context+="Next priority feature:\n"
             context+="\`\`\`json\n"
-            jq '[.features[] | select(.passes == false)] | sort_by(.priority) | .[0]' "$CLAUDE_PROJECT_DIR/feature_list.json" 2>/dev/null
+            context+="$(jq '[.features[] | select(.passes == false)] | sort_by(.priority) | .[0]' "$CLAUDE_PROJECT_DIR/feature_list.json" 2>/dev/null)\n"
             context+="\`\`\`\n\n"
         fi
     fi
