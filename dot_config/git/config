@@ -39,6 +39,8 @@
 [credential "https://gist.github.com"]
 	helper = 
 	helper = !/opt/homebrew/bin/gh auth git-credential
+[includeIf "gitdir:~/ghq/github.com/biosugar0/"]
+	path = ~/.config/git/config-biosugar0
 [gtr "ai"]
 	default = claude
 [gtr "editor"]
