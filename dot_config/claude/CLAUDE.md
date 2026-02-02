@@ -44,11 +44,6 @@ Fetchする際にはfetch MCP, もしくはreadability MCPを使用する。
 
 コード変更後は `ci-quality-check` skill が自動発動し、フォークされたcontextでCI品質チェックを実行する。
 
-## PRの作成
-
-PRの作成にはgh CLIを使用する。
-内容のフォーマットはまずテンプレートが存在するか確認し、存在する場合はテンプレートに従う。
-
 ## セッション引き継ぎ
 
 - **自動保存**: PreCompact hookでコンテキスト満杯時に自動保存される
