@@ -155,7 +155,7 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|resume",
+        "matcher": "startup|resume|compact",
         "hooks": [
           {
             "type": "command",
@@ -172,6 +172,18 @@
           {
             "type": "command",
             "command": "$HOME/.config/claude/hooks/pre-compact-save.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/post-tool-use-eol.ts",
             "timeout": 10
           }
         ]
@@ -214,7 +226,7 @@
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "Evaluate if Claude should stop. Context: $ARGUMENTS\n\nRules:\n- APPROVE if: waiting for user input, asked a question, all TODOs done, task complete\n- BLOCK only if: incomplete TODOs exist AND AI can complete them AND no user input needed\n\nDefault: approve. Block only for clear unfinished work.\n\nRespond with ONLY valid JSON (no explanation):\n{\"ok\": true, \"decision\": \"approve\"}\nor\n{\"ok\": false, \"decision\": \"block\", \"reason\": \"reason for Claude\", \"systemMessage\": \"User-visible message about continuing\"}",
+            "prompt": "Evaluate if Claude should stop. Context: $ARGUMENTS\n\nRules:\n- If stop_hook_active is true, ALWAYS return ok:true (prevent infinite loops)\n- APPROVE if: waiting for user input, asked a question, all TODOs done, task complete\n- BLOCK only if: incomplete TODOs exist AND AI can complete them AND no user input needed\n\nDefault: approve. Block only for clear unfinished work.\n\nRespond with ONLY valid JSON:\n{\"ok\": true}\nor\n{\"ok\": false, \"reason\": \"reason for Claude to continue\"}",
             "timeout": 30
           }
         ]
@@ -234,7 +246,7 @@
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "Evaluate if subagent should stop. Input: $ARGUMENTS\n\nRules:\n- APPROVE if: assigned task complete, ready to report to parent, waiting for user\n- BLOCK only if: task incomplete AND can complete independently AND no additional info needed\n\nDefault: approve. Block only for clear unfinished work.\n\nRespond with ONLY valid JSON (no explanation):\n{\"ok\": true, \"decision\": \"approve\"}\nor\n{\"ok\": false, \"decision\": \"block\", \"reason\": \"reason for subagent\", \"systemMessage\": \"User-visible message about continuing\"}",
+            "prompt": "Evaluate if subagent should stop. Input: $ARGUMENTS\n\nRules:\n- If stop_hook_active is true, ALWAYS return ok:true (prevent infinite loops)\n- APPROVE if: assigned task complete, ready to report to parent, waiting for user\n- BLOCK only if: task incomplete AND can complete independently AND no additional info needed\n\nDefault: approve. Block only for clear unfinished work.\n\nRespond with ONLY valid JSON:\n{\"ok\": true}\nor\n{\"ok\": false, \"reason\": \"reason for subagent to continue\"}",
             "timeout": 30
           }
         ]
