@@ -188,6 +188,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/pre-tool-use-block-merge.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
