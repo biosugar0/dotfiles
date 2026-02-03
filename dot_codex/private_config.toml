@@ -1,0 +1,15 @@
+model = "gpt-5.2-codex"
+disable_response_storage = true
+sandbox_mode = "workspace-write"
+model_reasoning_effort = "high"
+web_search = "live"
+
+[sandbox_workspace_write]
+network_access = true
+
+[notice]
+hide_gpt5_1_migration_prompt = true
+"hide_gpt-5.1-codex-max_migration_prompt" = true
+
+[notice.model_migrations]
+"gpt-5.1-codex-max" = "gpt-5.2-codex"
