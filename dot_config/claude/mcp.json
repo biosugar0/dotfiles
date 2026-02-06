@@ -22,14 +22,6 @@
       "args": ["-y", "@mizchi/readability", "--mcp"],
       "env": {}
     },
-    "codex": {
-      "type": "stdio",
-      "command": "codex",
-      "args": ["mcp-server"],
-      "env": {
-        "RUST_LOG": "codex_core=trace,codex_tui=trace"
-      }
-    },
     "playwright": {
       "type": "stdio",
       "command": "npx",
