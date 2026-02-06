@@ -1,5 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "outputStyle": "default",
   "env": {
     "ENABLE_TOOL_SEARCH": "false",
     "BASH_DEFAULT_TIMEOUT_MS": "300000",
@@ -243,7 +244,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat ~/.config/claude/styles/default_style.md | jq -Rs '{hookSpecificOutput:{hookEventName:\"UserPromptSubmit\",additionalContext:.}}'",
+            "command": "cat ~/.config/claude/hooks/workflow-instructions.md | jq -Rs '{hookSpecificOutput:{hookEventName:\"UserPromptSubmit\",additionalContext:.}}'",
             "timeout": 5
           }
         ]
