@@ -19,9 +19,10 @@ codex MCPは使わない。必ずこの手順でtmux経由で対話すること�
 
 ## 手順
 
-### Step 1: 初回プロンプト送信 + codex起動
+### Step 1: pane作成 + codex起動
 
-プロンプトをファイルに書き出してからcodexを起動する。pane IDを記録すること。
+**重要: 先にzsh paneを作成し、send-keysでcodexを起動する。**
+split-windowに直接コマンドを渡すと、引用符のネストやプロンプト内の特殊文字でシェル展開が壊れ、paneが即座に閉じる。
 
 ```bash
 # プロンプトをファイルに書き出し
@@ -29,10 +30,12 @@ cat > /tmp/codex-prompt.txt << 'PROMPT'
 （ここに質問を書く）
 PROMPT
 
-# codex pane作成（水平分割、下pane）
+# zsh pane作成（全幅水平分割、下30%）
 # pane IDが出力されるので記録する
-tmux split-window -v -f -d -l 30% -P -F '#{pane_id}' \
-  "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox \"$(cat /tmp/codex-prompt.txt)\""
+CODEX_PANE=$(tmux split-window -v -f -d -l 30% -P -F '#{pane_id}')
+
+# send-keysでcodex起動コマンドを送信
+tmux send-keys -t $CODEX_PANE "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox \"\$(cat /tmp/codex-prompt.txt)\"" Enter
 ```
 
 注意: `$CLAUDE_PROJECT_DIR`が設定されている場合は`-C "$CLAUDE_PROJECT_DIR"`を追加する。

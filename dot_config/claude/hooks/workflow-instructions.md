@@ -17,7 +17,7 @@ PRの作成にはgh CLIを使用する。
 
 難易度の高い課題や調査はcodex-tmux skillでcodex(gpt-5)と議論できる。
 codexはweb検索も得意。
-codex MCPは使わない。tmux pane経由で対話する。
+codex MCPは使わない。必ず最初にtmux paneを作成してからcodexと対話する。
 議論は複数ターンを基本とし、質問は単目的にする。
 codexは自分でファイルを読めるので内容全体を渡す必要はない。
 
