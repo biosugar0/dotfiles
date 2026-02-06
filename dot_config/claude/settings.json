@@ -254,9 +254,9 @@
       {
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "Evaluate if Claude should stop. Context: $ARGUMENTS\n\nRules:\n- If stop_hook_active is true, ALWAYS return ok:true (prevent infinite loops)\n- APPROVE if: waiting for user input, asked a question, all TODOs done, task complete\n- BLOCK only if: incomplete TODOs exist AND AI can complete them AND no user input needed\n\nDefault: approve. Block only for clear unfinished work.\n\nRespond with ONLY valid JSON:\n{\"ok\": true}\nor\n{\"ok\": false, \"reason\": \"reason for Claude to continue\"}",
-            "timeout": 30
+            "type": "agent",
+            "prompt": "Evaluate if Claude should stop. Context: $ARGUMENTS\n\nRules:\n- If stop_hook_active is true, ALWAYS return ok:true (prevent infinite loops)\n- APPROVE if: waiting for user input, asked a question, all TODOs done, task complete\n- BLOCK only if: incomplete TODOs exist AND AI can complete them AND no user input needed\n\nDefault: approve. Block only for clear unfinished work.\n\nRespond with: {\"ok\": true} or {\"ok\": false, \"reason\": \"reason for Claude to continue\"}",
+            "timeout": 60
           }
         ]
       },
@@ -274,9 +274,9 @@
       {
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "Evaluate if subagent should stop. Input: $ARGUMENTS\n\nRules:\n- If stop_hook_active is true, ALWAYS return ok:true (prevent infinite loops)\n- APPROVE if: assigned task complete, ready to report to parent, waiting for user\n- BLOCK only if: task incomplete AND can complete independently AND no additional info needed\n\nDefault: approve. Block only for clear unfinished work.\n\nRespond with ONLY valid JSON:\n{\"ok\": true}\nor\n{\"ok\": false, \"reason\": \"reason for subagent to continue\"}",
-            "timeout": 30
+            "type": "agent",
+            "prompt": "Evaluate if subagent should stop. Input: $ARGUMENTS\n\nRules:\n- If stop_hook_active is true, ALWAYS return ok:true (prevent infinite loops)\n- APPROVE if: assigned task complete, ready to report to parent, waiting for user\n- BLOCK only if: task incomplete AND can complete independently AND no additional info needed\n\nDefault: approve. Block only for clear unfinished work.\n\nRespond with: {\"ok\": true} or {\"ok\": false, \"reason\": \"reason for subagent to continue\"}",
+            "timeout": 60
           }
         ]
       },
