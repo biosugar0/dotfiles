@@ -196,6 +196,11 @@
             "type": "command",
             "command": "$HOME/.config/claude/hooks/pre-tool-use-block-merge.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/pre-tool-use-block-forbidden-dirs.sh",
+            "timeout": 5
           }
         ]
       }
