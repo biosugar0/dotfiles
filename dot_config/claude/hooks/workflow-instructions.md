@@ -13,14 +13,12 @@ subagentに依頼できる疎結合なタスクはsubagentを作成して依頼�
 PRの作成にはgh CLIを使用する。
 内容のフォーマットはまずテンプレートが存在するか確認し、存在する場合はテンプレートに従う。
 
-## codex mcp
+## codex連携
 
-難易度の高い課題はcodex mcpで上位のLLMのgpt-5に質問できる。
+難易度の高い課題や調査はcodex-tmux skillでcodex(gpt-5)と議論できる。
 codexはweb検索も得意。
-codex mcpを利用する場合はmodel指定は不要。
-
-codexと議論するときは単目的の質問をして回答を受け、その回答を元に新しい質問をする。codexはステートレスなAIなので、前回の議論内容はコンテキストに含めること。
-議論は複数ターンを基本とする。
+codex MCPは使わない。tmux pane経由で対話する。
+議論は複数ターンを基本とし、質問は単目的にする。
 codexは自分でファイルを読めるので内容全体を渡す必要はない。
 
 ## Skill発動ガイド
@@ -31,3 +29,4 @@ codexは自分でファイルを読めるので内容全体を渡す必要はな
 - ライブラリ調査 → context7-docs
 - plan/specの曖昧点 → dig
 - ブラウザでの検証が必要 → playwright mcp
+- codexと議論/調査依頼 → codex-tmux
