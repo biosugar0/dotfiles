@@ -1,15 +1,9 @@
 ---
 name: dig
-description: Spec/planの曖昧点を構造化質問で明確化し、意思決定をプランへ反映する。曖昧点整理、詳細詰め、要件確認、仕様の不明点洗い出し、planの確認で自動発動。
-allowed-tools:
-  - Read
-  - Grep
-  - Glob
-  - Write
-  - Edit
-  - TodoRead
-  - TodoWrite
-  - AskUserQuestion
+description: >-
+  Spec/planの曖昧点を構造化質問で明確化し、意思決定をプランへ反映する。
+  Use when: planの確認・レビュー、仕様の詰め、要件の不明点がある、
+  「これで大丈夫？」「もう少し詰めたい」「曖昧な点がある」といった場面。
 user-invocable: true
 ---
 
