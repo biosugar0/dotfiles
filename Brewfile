@@ -73,7 +73,8 @@ cask "wezterm"
 
 # Casks - Cloud
 cask "gcloud-cli"
-cask "session-manager-plugin"
+# session-manager-plugin requires sudo and is deprecated (2026-09-01)
+# Install manually: brew install --cask session-manager-plugin
 
 # Casks - Fonts
 cask "font-cica"
