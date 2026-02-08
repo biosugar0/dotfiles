@@ -1,6 +1,7 @@
 ---
 name: long-running-agent
 description: 複数のコンテキストウィンドウにまたがる大規模タスクを検出した際に自動発動。セッション分割、進捗保存、引き継ぎの最適パターンを適用する。
+user-invocable: false
 ---
 
 # 長期実行エージェントパターン
