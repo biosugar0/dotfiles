@@ -42,7 +42,7 @@ brew "postgresql@16"
 
 # Development tools
 brew "aqua"
-brew "codex"
+cask "codex"
 brew "docker-compose"
 brew "golangci-lint"
 brew "neovim"
