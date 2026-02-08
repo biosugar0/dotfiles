@@ -12,6 +12,16 @@ description: >-
 
 **注意**: 禁止ディレクトリ（ai/, .serena/）のガードはPreToolUse hookで強制されるため、このスキルでは扱わない。
 
+## 現在の変更状況
+
+```
+!`git status --short 2>/dev/null`
+```
+
+```
+!`git diff --cached --stat 2>/dev/null`
+```
+
 ## コミット計画
 
 複数の論理的変更がある場合は `/commit-plan` を実行して分割を検討。

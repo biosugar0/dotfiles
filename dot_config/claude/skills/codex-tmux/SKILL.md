@@ -4,6 +4,7 @@ description: >-
   tmux pane分割でcodex CLIと対話する。難易度の高い課題の議論、調査、web検索に使用。
   Use when: codexと議論したい、調査を依頼したい、web検索が必要、難問を相談したい場面。
 user-invocable: true
+argument-hint: "[question]"
 ---
 
 # codex-tmux: tmux経由でcodex CLIと対話
@@ -37,8 +38,6 @@ CODEX_PANE=$(tmux split-window -v -f -d -l 30% -P -F '#{pane_id}')
 # send-keysでcodex起動コマンドを送信
 tmux send-keys -t $CODEX_PANE "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox \"\$(cat /tmp/codex-prompt.txt)\"" Enter
 ```
-
-注意: `$CLAUDE_PROJECT_DIR`が設定されている場合は`-C "$CLAUDE_PROJECT_DIR"`を追加する。
 
 ### Step 2: 完了検知
 
