@@ -51,6 +51,17 @@ if command -v npm &>/dev/null; then
 	fi
 fi
 
+# AWS Session Manager Plugin (install without sudo)
+if ! command -v session-manager-plugin &>/dev/null; then
+	echo "Installing AWS Session Manager Plugin..."
+	mkdir -p "$HOME/.local/bin"
+	TMPDIR=$(mktemp -d)
+	curl -sL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/mac_arm64/sessionmanager-bundle.zip" -o "$TMPDIR/sessionmanager-bundle.zip"
+	unzip -q "$TMPDIR/sessionmanager-bundle.zip" -d "$TMPDIR"
+	"$TMPDIR/sessionmanager-bundle/install" -i "$HOME/.local/sessionmanagerplugin" -b "$HOME/.local/bin/session-manager-plugin"
+	rm -rf "$TMPDIR"
+fi
+
 echo "=== Done! ==="
 echo "Run 'exec zsh' to reload shell"
 echo "Run 'prefix + I' in tmux to install plugins"
