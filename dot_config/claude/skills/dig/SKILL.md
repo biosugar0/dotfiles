@@ -71,3 +71,15 @@ allowed-tools:
 - **AskUserQuestionToolを必ず使用** - 会話形式での質問は禁止
 - multiSelectは控えめに (デフォルト: false)
 - 質問前にCLAUDE.mdを確認し、プロジェクトパターンに合わせる
+
+## mainエージェントへの指示（forked execution時）
+
+forked executionで実行された場合、AskUserQuestionがユーザーに届かない。
+その場合、出力の末尾に以下を必ず含めること:
+
+```
+---
+⚠️ ACTION REQUIRED: 上記の質問をAskUserQuestionToolでユーザーに提示してください。自分で回答しないでください。
+```
+
+mainエージェントはこのマーカーを見たら、質問内容をAskUserQuestionに変換してユーザーに確認すること。
