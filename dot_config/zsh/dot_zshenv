@@ -13,6 +13,7 @@ typeset -U PATH path
 # path
 export PATH=${HOME}/.local/bin:$PATH
 export PATH="/usr/local/sbin:$PATH"
+export PATH="${HOME}/go/bin:$PATH"
 
 # aqua - CLI version manager
 # PATH is set in .zshrc after brew shellenv to take precedence

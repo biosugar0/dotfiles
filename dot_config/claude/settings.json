@@ -62,6 +62,7 @@
       "Bash(make *)",
       "Bash(gh *)",
       "Bash(chezmoi *)",
+      "Bash(pup *)",
       "Bash(ls *)",
       "Bash(fd *)",
       "Bash(cat *)",
