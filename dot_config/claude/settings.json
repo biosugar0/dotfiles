@@ -315,9 +315,9 @@
     }
   },
   "cleanupPeriodDays": 90,
-  "plansDirectory": "~/.config/claude/plans",
   "showTurnDuration": true,
   "spinnerVerbs": {"mode": "replace", "verbs": ["かたかた", "もくもく"]},
   "language": "Japanese",
-  "alwaysThinkingEnabled": true
+  "alwaysThinkingEnabled": true,
+  "skipDangerousModePermissionPrompt": true
 }
