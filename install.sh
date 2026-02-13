@@ -43,6 +43,14 @@ if command -v ghq &>/dev/null; then
 	ln -sf "$HOME/ghq/github.com/coderabbitai/git-worktree-runner/bin/git-gtr" "$HOME/.local/bin/git-gtr"
 fi
 
+# Datadog pup CLI
+if command -v go &>/dev/null; then
+	if ! command -v pup &>/dev/null; then
+		echo "Installing pup (Datadog CLI)..."
+		go install github.com/DataDog/pup@latest
+	fi
+fi
+
 # editprompt (CLI tool for writing prompts in editor)
 if command -v npm &>/dev/null; then
 	if ! command -v editprompt &>/dev/null; then

@@ -1,7 +1,6 @@
 tap "aquaproj/aqua"
 tap "felixkratz/formulae"
 tap "nikitabobko/tap"
-tap "datadog/pack"
 tap "warashi/tap"
 
 # Core tools
@@ -12,9 +11,6 @@ brew "gh"
 brew "ghq"
 brew "tree"
 brew "wget"
-
-# Datadog CLI
-brew "datadog/pack/pup"
 
 # Shell & Terminal
 brew "bat"
