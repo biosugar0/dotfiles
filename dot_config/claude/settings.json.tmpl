@@ -1,3 +1,6 @@
+{{- $privateRepo := dig "private_marketplace" "repo" "" . -}}
+{{- $privateName := dig "private_marketplace" "name" "" . -}}
+{{- $privatePlugins := dig "private_marketplace" "plugins" (list) . -}}
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "outputStyle": "default",
@@ -305,6 +308,9 @@
     "gopls-lsp@claude-plugins-official": true,
     "pyright-lsp@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true
+{{- range $privatePlugins }},
+    "{{ . }}@{{ $privateName }}": true
+{{- end }}
   },
   "extraKnownMarketplaces": {
     "local-plugins": {
@@ -313,6 +319,14 @@
         "path": "~/.config/claude/plugins"
       }
     }
+{{- if $privateRepo }},
+    "{{ $privateName }}": {
+      "source": {
+        "source": "github",
+        "repo": "{{ $privateRepo }}"
+      }
+    }
+{{- end }}
   },
   "cleanupPeriodDays": 90,
   "showTurnDuration": true,
