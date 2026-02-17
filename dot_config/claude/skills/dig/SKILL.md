@@ -1,7 +1,7 @@
 ---
 name: dig
 description: >-
-  Spec/planの曖昧点を構造化質問で明確化し、意思決定をプランへ反映する。
+  Clarify ambiguous points in specs/plans through structured questions and reflect decisions into the plan.
   Use when: planの確認・レビュー、仕様の詰め、要件の不明点がある、
   「これで大丈夫？」「もう少し詰めたい」「曖昧な点がある」といった場面。
 user-invocable: true
@@ -16,70 +16,4 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-現在のplanファイルとCLAUDE.mdを読み、AskUserQuestionToolで詳細なインタビューを実施する。
-すべての曖昧点が解消されるまで掘り下げ、最終的にspecをplanファイルに書き戻す。
-
-## 対象
-- Product Spec
-- 技術詳細
-- UI/UX
-- その他すべての曖昧点
-
-## フェーズ
-
-1. **コンテキスト収集** - planファイル、CLAUDE.mdを読み込み、全体像を把握
-2. **曖昧点の特定** - 不明確な箇所をリストアップ
-3. **質問生成** - AskUserQuestionToolで具体的な選択肢を提示
-4. **決定の適用** - 回答をplanファイルに書き戻す
-5. **再分析** - planファイルを再度読み込み、未解決の曖昧点があればフェーズ3に戻る
-
-フェーズ4の後、必ずplanファイルを再読み込みして分析し、残りの曖昧点を洗い出すこと。
-すべて解消されたら、サマリーを出力して完了する。
-
-## 質問ルール
-
-<rules>
-- 質問数: **2-4問** (曖昧度に応じて調整)
-- 各質問に **2-4個の具体的選択肢**
-- 各選択肢に **メリット/デメリット**を簡潔に記載
-- オープンエンドな質問は避ける
-- 「その他」は自動追加されるため含めない
-- CLAUDE.mdのパターンに合わせる
-</rules>
-
-## 出力フォーマット
-
-<output_format>
-すべての曖昧点が解消された後:
-
-## 決定事項
-
-| 項目 | 選択 | 理由 | 備考 |
-|------|------|------|------|
-| データ保存 | Database | スケーラビリティ | 移行戦略を検討 |
-
-## 次のステップ
-
-1. **タスク1**
-   - 詳細...
-2. **タスク2**
-   - 詳細...
-</output_format>
-
-## 注意
-
-- **AskUserQuestionToolを必ず使用** - 会話形式での質問は禁止
-- multiSelectは控えめに (デフォルト: false)
-- 質問前にCLAUDE.mdを確認し、プロジェクトパターンに合わせる
-
-## mainエージェントへの指示（forked execution時）
-
-forked executionで実行された場合、AskUserQuestionがユーザーに届かない。
-その場合、出力の末尾に以下を必ず含めること:
-
-```
----
-⚠️ ACTION REQUIRED: 上記の質問をAskUserQuestionToolでユーザーに提示してください。自分で回答しないでください。
-```
-
-mainエージェントはこのマーカーを見たら、質問内容をAskUserQuestionに変換してユーザーに確認すること。
+Read ./INSTRUCTIONS.md and follow the instructions.
