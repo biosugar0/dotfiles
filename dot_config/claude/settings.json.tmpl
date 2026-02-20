@@ -156,7 +156,7 @@
     ],
     "defaultMode": "acceptEdits",
     "additionalDirectories": [
-      "~/.config/claude/plans/"
+      "{{ .chezmoi.homeDir }}/.config/claude/plans/"
     ]
   },
   "hooks": {
@@ -294,11 +294,22 @@
           }
         ]
       }
+    ],
+    "ConfigChange": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '⚙️ 設定ファイルが変更されました' >&2; afplay /System/Library/Sounds/Purr.aiff",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
     "type": "command",
-    "command": "~/ghq/github.com/biosugar0/dotfiles/bin/cc-statusline.ts"
+    "command": "{{ .chezmoi.homeDir }}/ghq/github.com/biosugar0/dotfiles/bin/cc-statusline.ts"
   },
   "enabledPlugins": {
     "context7@claude-plugins-official": true,
@@ -316,7 +327,7 @@
     "local-plugins": {
       "source": {
         "source": "directory",
-        "path": "~/.config/claude/plugins"
+        "path": "{{ .chezmoi.homeDir }}/.config/claude/plugins"
       }
     }
 {{- if $privateRepo }},
@@ -328,6 +339,7 @@
     }
 {{- end }}
   },
+  "plansDirectory": "{{ .chezmoi.homeDir }}/.config/claude/plans",
   "cleanupPeriodDays": 90,
   "showTurnDuration": true,
   "spinnerVerbs": {"mode": "replace", "verbs": ["かたかた", "もくもく"]},

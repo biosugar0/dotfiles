@@ -23,7 +23,7 @@ install.sh
 .config/claude/shell-snapshots/
 .config/claude/todos/
 .config/claude/.serena/
-.config/claude/agents/
+# agents/ は chezmoi で管理する（background, isolation 等の設定を反映するため）
 .config/claude/chrome/
 .config/claude/extensions/
 .config/claude/ide/
