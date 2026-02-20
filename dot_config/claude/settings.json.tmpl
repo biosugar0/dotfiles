@@ -259,9 +259,9 @@
       {
         "hooks": [
           {
-            "type": "agent",
-            "prompt": "Evaluate if Claude should stop. Context: $ARGUMENTS\n\nRules:\n- If stop_hook_active is true, ALWAYS return ok:true (prevent infinite loops)\n- APPROVE if: waiting for user input, asked a question, all TODOs done, task complete\n- BLOCK only if: incomplete TODOs exist AND AI can complete them AND no user input needed\n\nDefault: approve. Block only for clear unfinished work.\n\nreasonは日本語で書くこと。Respond with: {\"ok\": true} or {\"ok\": false, \"reason\": \"日本語で継続理由を書く\"}",
-            "timeout": 60
+            "type": "prompt",
+            "prompt": "You MUST respond with ONLY a JSON object, no other text.\n\nEvaluate if Claude should stop. Input: $ARGUMENTS\n\nCheck `last_assistant_message` to judge completion:\n\nRules:\n- If stop_hook_active is true: {\"ok\": true}\n- APPROVE if: last_assistant_message asks user a question, reports completion, or awaits input; all TODOs done\n- BLOCK only if: last_assistant_message shows mid-task work with clear next steps AND incomplete TODOs that AI can finish without user input\n\nDefault: approve.\n\nRespond ONLY with raw JSON: {\"ok\": true} or {\"ok\": false, \"reason\": \"日本語で継続理由\"}",
+            "timeout": 30
           }
         ]
       },
@@ -279,9 +279,9 @@
       {
         "hooks": [
           {
-            "type": "agent",
-            "prompt": "Evaluate if subagent should stop. Input: $ARGUMENTS\n\nRules:\n- If stop_hook_active is true, ALWAYS return ok:true (prevent infinite loops)\n- APPROVE if: assigned task complete, ready to report to parent, waiting for user\n- BLOCK only if: task incomplete AND can complete independently AND no additional info needed\n\nDefault: approve. Block only for clear unfinished work.\n\nreasonは日本語で書くこと。Respond with: {\"ok\": true} or {\"ok\": false, \"reason\": \"日本語で継続理由を書く\"}",
-            "timeout": 60
+            "type": "prompt",
+            "prompt": "You MUST respond with ONLY a JSON object, no other text.\n\nEvaluate if subagent should stop. Input: $ARGUMENTS\n\nCheck `last_assistant_message` to judge completion:\n\nRules:\n- If stop_hook_active is true: {\"ok\": true}\n- APPROVE if: last_assistant_message contains completed result/report, ready to return to parent, or needs user input\n- BLOCK only if: last_assistant_message shows mid-task with clear next steps AND can complete independently without additional info\n\nDefault: approve.\n\nRespond ONLY with raw JSON: {\"ok\": true} or {\"ok\": false, \"reason\": \"日本語で継続理由\"}",
+            "timeout": 30
           }
         ]
       },
