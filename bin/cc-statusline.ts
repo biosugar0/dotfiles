@@ -2,7 +2,7 @@
 
 import { readAll } from "jsr:@std/io@0.224/read-all";
 
-interface StatusLineInput {
+type StatusLineInput = {
   model?: { id?: string; display_name?: string };
   workspace?: { current_dir?: string; project_dir?: string };
   context_window?: {
@@ -24,7 +24,7 @@ interface StatusLineInput {
   exceeds_200k_tokens?: boolean;
   vim?: { mode?: string };
   agent?: { name?: string };
-}
+};
 
 const RESET = "\x1b[0m";
 const RED = "\x1b[31m";
