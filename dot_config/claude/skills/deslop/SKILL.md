@@ -1,7 +1,6 @@
 ---
 name: deslop
 description: Remove AI-generated slop code from the current branch. AIが生成した余計なコード（slop）を現在のブランチから削除。
-context: fork
 model: sonnet
 user-invocable: true
 allowed-tools:
