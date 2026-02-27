@@ -91,6 +91,7 @@ alt-t = 'workspace T' # Terminal
 alt-c = 'workspace C' # Communication (Slack等)
 alt-n = 'workspace N' # Notes
 alt-e = 'workspace E' # Editor
+alt-f = 'workspace F' # Finder
 alt-z = 'workspace Z' # Zoom
 
 # ウィンドウをワークスペースに移動
@@ -109,6 +110,7 @@ alt-shift-t = 'move-node-to-workspace T'
 alt-shift-c = 'move-node-to-workspace C'
 alt-shift-n = 'move-node-to-workspace N'
 alt-shift-e = 'move-node-to-workspace E'
+alt-shift-f = 'move-node-to-workspace F'
 alt-shift-z = 'move-node-to-workspace Z'
 
 # ワークスペース間移動
@@ -133,7 +135,7 @@ alt-shift-l = ['join-with right', 'mode main']
 # アプリごとのワークスペース割り当て
 [[on-window-detected]]
 if.app-id = 'com.apple.finder'
-run = 'layout floating'
+run = ['layout floating', 'move-node-to-workspace F']
 
 [[on-window-detected]]
 if.app-id = 'com.github.wez.wezterm'
@@ -154,6 +156,10 @@ run = 'move-node-to-workspace C'
 [[on-window-detected]]
 if.app-id = 'notion.id'
 run = 'move-node-to-workspace N'
+
+[[on-window-detected]]
+if.app-id = 'md.obsidian'
+run = ['layout floating', 'move-node-to-workspace N']
 
 [[on-window-detected]]
 if.app-id = 'us.zoom.xos'
