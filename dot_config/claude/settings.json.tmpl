@@ -33,6 +33,7 @@
     "allow": [
       "mcp__gpt-5",
       "Bash(playwright-cli *)",
+      "Bash(obsidian *)",
       "mcp__context7",
       "Bash(macos-notify-cli *)",
       "List(*)",
@@ -320,7 +321,8 @@
     "frontend-design@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true,
     "pyright-lsp@claude-plugins-official": true,
-    "typescript-lsp@claude-plugins-official": true
+    "typescript-lsp@claude-plugins-official": true,
+    "obsidian@obsidian-skills": true
 {{- range $privatePlugins }},
     "{{ . }}@{{ $privateName }}": true
 {{- end }}
@@ -330,6 +332,12 @@
       "source": {
         "source": "directory",
         "path": "{{ .chezmoi.homeDir }}/.config/claude/plugins"
+      }
+    },
+    "obsidian-skills": {
+      "source": {
+        "source": "github",
+        "repo": "kepano/obsidian-skills"
       }
     }
 {{- if $privateRepo }},
