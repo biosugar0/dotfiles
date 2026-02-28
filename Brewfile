@@ -1,6 +1,7 @@
 tap "aquaproj/aqua"
 tap "felixkratz/formulae"
 tap "nikitabobko/tap"
+tap "datadog-labs/pack"
 tap "warashi/tap"
 
 # Core tools
@@ -53,6 +54,9 @@ brew "prettier"
 brew "shfmt"
 brew "stylua"
 brew "yamllint"
+
+# Observability
+brew "datadog-labs/pack/pup"
 
 # Infrastructure
 brew "awscli"
