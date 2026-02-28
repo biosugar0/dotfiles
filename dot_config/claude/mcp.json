@@ -21,14 +21,6 @@
       "command": "npx",
       "args": ["-y", "@mizchi/readability", "--mcp"],
       "env": {}
-    },
-    "playwright": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["@playwright/mcp@latest", "--extension"],
-      "env": {
-        "PLAYWRIGHT_MCP_EXTENSION_TOKEN": "${PLAYWRIGHT_MCP_EXTENSION_TOKEN}"
-      }
     }
   }
 }

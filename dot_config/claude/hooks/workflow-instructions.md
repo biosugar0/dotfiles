@@ -28,5 +28,5 @@ codexは自分でファイルを読めるので内容全体を渡す必要はな
 - 3+独立タスク → orchestrator
 - ライブラリ調査 → context7-docs
 - plan/specの曖昧点 → dig
-- ブラウザでの検証が必要 → playwright mcp
+- ブラウザでの検証が必要 → playwright skill（CLI）
 - codexと議論/調査依頼 → codex-tmux
