@@ -3,6 +3,8 @@ disable_response_storage = true
 sandbox_mode = "workspace-write"
 model_reasoning_effort = "high"
 web_search = "live"
+[features] 
+voice_transcription = true
 
 [sandbox_workspace_write]
 network_access = true
