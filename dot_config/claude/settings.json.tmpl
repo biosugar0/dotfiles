@@ -11,7 +11,10 @@
     "MCP_TIMEOUT": "3600000",
     "MAX_MCP_OUTPUT_TOKENS": "50000",
     "BASH_MAX_TIMEOUT_MS": "1200000",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "DISABLE_AUTOUPDATER": "1",
+    "DISABLE_BUG_COMMAND": "1",
+    "DISABLE_ERROR_REPORTING": "1",
+    "DISABLE_TELEMETRY": "1",
     "API_TIMEOUT_MS": "1200000",
     "DISABLE_COST_WARNINGS": "0",
     "ENABLE_BACKGROUND_TASKS": "true",
@@ -29,7 +32,7 @@
   "permissions": {
     "allow": [
       "mcp__gpt-5",
-      "mcp__playwright",
+      "Bash(playwright-cli *)",
       "mcp__context7",
       "Bash(macos-notify-cli *)",
       "List(*)",
@@ -313,7 +316,6 @@
   },
   "enabledPlugins": {
     "context7@claude-plugins-official": true,
-    "code-simplifier@claude-plugins-official": true,
     "document-skills@anthropic-agent-skills": true,
     "frontend-design@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true,
