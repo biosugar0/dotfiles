@@ -15,3 +15,5 @@ if echo "$command" | grep -qE '^(git merge( |$)|gh pr merge( |$))'; then
     }
   }'
 fi
+
+exit 0
