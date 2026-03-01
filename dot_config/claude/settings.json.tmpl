@@ -262,8 +262,8 @@
       {
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "You MUST respond with ONLY a JSON object, no other text.\n\nEvaluate if Claude should stop. Input: $ARGUMENTS\n\nCheck `last_assistant_message` to judge completion:\n\nRules:\n- If stop_hook_active is true: {\"ok\": true}\n- APPROVE if: last_assistant_message asks user a question, reports completion, or awaits input; all TODOs done\n- BLOCK only if: last_assistant_message shows mid-task work with clear next steps AND incomplete TODOs that AI can finish without user input\n\nDefault: approve.\n\nRespond ONLY with raw JSON: {\"ok\": true} or {\"ok\": false, \"reason\": \"日本語で継続理由\"}",
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/stop-hook.ts",
             "timeout": 30
           }
         ]
@@ -282,8 +282,8 @@
       {
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "You MUST respond with ONLY a JSON object, no other text.\n\nEvaluate if subagent should stop. Input: $ARGUMENTS\n\nCheck `last_assistant_message` to judge completion:\n\nRules:\n- If stop_hook_active is true: {\"ok\": true}\n- APPROVE if: last_assistant_message contains completed result/report, ready to return to parent, or needs user input\n- BLOCK only if: last_assistant_message shows mid-task with clear next steps AND can complete independently without additional info\n\nDefault: approve.\n\nRespond ONLY with raw JSON: {\"ok\": true} or {\"ok\": false, \"reason\": \"日本語で継続理由\"}",
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/stop-hook.ts",
             "timeout": 30
           }
         ]
