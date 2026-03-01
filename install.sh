@@ -23,6 +23,18 @@ if ! command -v chezmoi &>/dev/null; then
 	brew install chezmoi
 fi
 
+# Clone repos required by chezmoi symlinks (must run before chezmoi apply)
+if command -v ghq &>/dev/null; then
+	if [[ ! -d "$HOME/ghq/github.com/datadog-labs/agent-skills" ]]; then
+		echo "Cloning datadog-labs/agent-skills..."
+		ghq get datadog-labs/agent-skills
+	fi
+	if [[ ! -d "$HOME/ghq/github.com/coderabbitai/git-worktree-runner" ]]; then
+		echo "Cloning git-worktree-runner..."
+		ghq get coderabbitai/git-worktree-runner
+	fi
+fi
+
 # Apply dotfiles
 echo "Applying dotfiles with chezmoi..."
 chezmoi init --source "$SCRIPT_DIR" --apply
@@ -35,20 +47,8 @@ fi
 
 # git-worktree-runner (git gtr)
 if command -v ghq &>/dev/null; then
-	if [[ ! -d "$HOME/ghq/github.com/coderabbitai/git-worktree-runner" ]]; then
-		echo "Installing git-worktree-runner..."
-		ghq get coderabbitai/git-worktree-runner
-	fi
 	mkdir -p "$HOME/.local/bin"
 	ln -sf "$HOME/ghq/github.com/coderabbitai/git-worktree-runner/bin/git-gtr" "$HOME/.local/bin/git-gtr"
-fi
-
-# Datadog pup CLI
-if command -v go &>/dev/null; then
-	if ! command -v pup &>/dev/null; then
-		echo "Installing pup (Datadog CLI)..."
-		go install github.com/DataDog/pup@latest
-	fi
 fi
 
 # editprompt (CLI tool for writing prompts in editor)
