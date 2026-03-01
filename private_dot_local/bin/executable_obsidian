@@ -1,0 +1,20 @@
+#!/bin/bash
+# Obsidian CLI wrapper
+# Detects sandbox-exec and routes through tmux if needed
+
+OBSIDIAN_BIN="/Applications/Obsidian.app/Contents/MacOS/Obsidian"
+
+# Detect sandbox: sandbox-exec cannot nest
+if /usr/bin/sandbox-exec -p '(version 1)(allow default)' /usr/bin/true 2>/dev/null; then
+  # Not in sandbox — exec real binary directly
+  exec "$OBSIDIAN_BIN" "$@"
+else
+  # In sandbox — route through tmux
+  TMPFILE=$(mktemp /tmp/obsidian-cli-XXXXXX)
+  SIGNAL="obsidian-done-$$"
+  tmux new-window -d -n obsidian-cli \
+    "$OBSIDIAN_BIN $* > $TMPFILE 2>&1; tmux wait-for -S $SIGNAL"
+  tmux wait-for "$SIGNAL"
+  cat "$TMPFILE"
+  rm -f "$TMPFILE"
+fi
