@@ -25,10 +25,6 @@ fi
 
 # Clone repos required by chezmoi symlinks (must run before chezmoi apply)
 if command -v ghq &>/dev/null; then
-	if [[ ! -d "$HOME/ghq/github.com/datadog-labs/agent-skills" ]]; then
-		echo "Cloning datadog-labs/agent-skills..."
-		ghq get datadog-labs/agent-skills
-	fi
 	if [[ ! -d "$HOME/ghq/github.com/coderabbitai/git-worktree-runner" ]]; then
 		echo "Cloning git-worktree-runner..."
 		ghq get coderabbitai/git-worktree-runner
