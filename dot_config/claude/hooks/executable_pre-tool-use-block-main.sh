@@ -32,6 +32,6 @@ jq -n '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
     permissionDecision: "deny",
-    permissionDecisionReason: "mainブランチでの編集はブロックされた。git gtr new <branch> でworktreeを作成して作業してください。"
+    permissionDecisionReason: "mainブランチでの編集はブロックされた。Taskツール(isolation: \"worktree\")で修正するか、git gtr new <branch> でworktreeを作成して作業してください。"
   }
 }'
