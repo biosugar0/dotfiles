@@ -47,6 +47,11 @@ if command -v ghq &>/dev/null; then
 	ln -sf "$HOME/ghq/github.com/coderabbitai/git-worktree-runner/bin/git-gtr" "$HOME/.local/bin/git-gtr"
 fi
 
+# playwright-ext-token
+DOTFILES_DIR="$HOME/ghq/github.com/biosugar0/dotfiles"
+mkdir -p "$HOME/.local/bin"
+ln -sf "$DOTFILES_DIR/bin/playwright-ext-token" "$HOME/.local/bin/playwright-ext-token"
+
 # editprompt (CLI tool for writing prompts in editor)
 if command -v npm &>/dev/null; then
 	if ! command -v editprompt &>/dev/null; then
