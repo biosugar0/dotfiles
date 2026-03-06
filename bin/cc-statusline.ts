@@ -256,20 +256,15 @@ function formatResetTime(isoStr: string): string {
   if (!isoStr) return "";
   try {
     const d = new Date(isoStr);
-    const fmt = new Intl.DateTimeFormat("en-US", {
+    const fmt = new Intl.DateTimeFormat("ja-JP", {
       timeZone: "Asia/Tokyo",
-      month: "short",
+      month: "numeric",
       day: "numeric",
-      hour: "numeric",
-      minute: undefined,
-      hour12: true,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
     });
-    const parts = fmt.formatToParts(d);
-    const month = parts.find((p) => p.type === "month")?.value ?? "";
-    const day = parts.find((p) => p.type === "day")?.value ?? "";
-    const hour = parts.find((p) => p.type === "hour")?.value ?? "";
-    const dayPeriod = parts.find((p) => p.type === "dayPeriod")?.value?.toLowerCase() ?? "";
-    return `${month} ${day} ${hour}${dayPeriod}`;
+    return fmt.format(d);
   } catch {
     return "";
   }
