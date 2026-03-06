@@ -26,6 +26,12 @@ type StatusLineInput = {
   exceeds_200k_tokens?: boolean;
   vim?: { mode?: string };
   agent?: { name?: string };
+  worktree?: {
+    name?: string;
+    path?: string;
+    branch?: string;
+    original_repo_dir?: string;
+  };
 };
 
 type UsageCache = {
@@ -223,7 +229,9 @@ async function main() {
   const exceeds200k = input.exceeds_200k_tokens ?? false;
 
   const [gitBranch, usageCache] = await Promise.all([
-    getGitBranch(input.workspace?.current_dir),
+    input.worktree?.branch
+      ? Promise.resolve(input.worktree.branch)
+      : getGitBranch(input.workspace?.current_dir),
     getUsage(),
   ]);
 
@@ -234,7 +242,12 @@ async function main() {
   if (linesAdded || linesRemoved) {
     infoParts.push(`✏️ +${linesAdded}/-${linesRemoved}`);
   }
-  if (gitBranch) infoParts.push(`󰘬  ${gitBranch}`);
+  if (gitBranch) {
+    const branchLabel = input.worktree?.name
+      ? `󰘬  ${gitBranch} ${GRAY}(wt: ${input.worktree.name})${RESET}`
+      : `󰘬  ${gitBranch}`;
+    infoParts.push(branchLabel);
+  }
   const infoStr = infoParts.join(sep);
 
   // Line 2: context bar | duration | 200k warning
