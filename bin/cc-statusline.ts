@@ -258,8 +258,8 @@ function formatResetTime(isoStr: string): string {
     const d = new Date(isoStr);
     const fmt = new Intl.DateTimeFormat("ja-JP", {
       timeZone: "Asia/Tokyo",
-      month: "numeric",
-      day: "numeric",
+      month: "2-digit",
+      day: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
