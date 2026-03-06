@@ -35,7 +35,7 @@ if echo "$command" | grep -qE 'git add\s+(\.|--all|-A|:/)(\s|$)'; then
 fi
 
 # git commit -a / git commit -am をブロック
-if echo "$command" | grep -qE 'git commit\s+.*-[a-zA-Z]*a'; then
+if echo "$command" | grep -qE 'git commit\s+(.*\s)?-([a-zA-Z]*)a([a-zA-Z]*)(\s|$)'; then
   jq -n '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
