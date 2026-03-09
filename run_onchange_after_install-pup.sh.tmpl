@@ -1,0 +1,38 @@
+#!/bin/bash
+{{- if eq .chezmoi.os "darwin" }}
+# pup version: v0.28.0
+set -euo pipefail
+
+PUP_VERSION="0.28.0"
+INSTALL_DIR="${HOME}/.local/bin"
+
+{{- if eq .chezmoi.arch "arm64" }}
+ARCH="arm64"
+{{- else }}
+ARCH="x86_64"
+{{- end }}
+
+OS="Darwin"
+URL="https://github.com/datadog-labs/pup/releases/download/v${PUP_VERSION}/pup_${PUP_VERSION}_${OS}_${ARCH}.tar.gz"
+
+current_version=""
+if command -v pup &>/dev/null; then
+  current_version=$(pup version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+fi
+
+if [[ "$current_version" == "$PUP_VERSION" ]]; then
+  echo "==> pup v${PUP_VERSION} already installed"
+  exit 0
+fi
+
+mkdir -p "${INSTALL_DIR}"
+echo "==> Installing pup v${PUP_VERSION} (${ARCH})..."
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+curl -fsSL "$URL" | tar xz -C "$tmpdir"
+chmod +x "$tmpdir/pup"
+mv "$tmpdir/pup" "${INSTALL_DIR}/pup"
+
+echo "==> pup v${PUP_VERSION} installed"
+{{- end }}
