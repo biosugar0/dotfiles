@@ -22,9 +22,9 @@ cat > /tmp/codex-prompt.txt << 'PROMPT'
 （ここに質問を書く）
 PROMPT
 
-# zsh pane作成（全幅水平分割、下30%）
-# pane IDが出力されるので記録する
-CODEX_PANE=$(tmux split-window -v -f -d -l 30% -P -F '#{pane_id}')
+# Claude Code自身のpaneの下に分割（全幅水平分割、下30%）
+# $TMUX_PANE でClaude Codeが動作しているpaneをターゲットにする
+CODEX_PANE=$(tmux split-window -v -f -d -l 30% -t "$TMUX_PANE" -P -F '#{pane_id}')
 
 # send-keysでcodex起動コマンドを送信
 tmux send-keys -t $CODEX_PANE "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox \"\$(cat /tmp/codex-prompt.txt)\"" Enter
