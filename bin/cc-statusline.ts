@@ -300,14 +300,18 @@ async function summarizeWithHaiku(
         messages: [
           {
             role: "user",
-            content: `セッション情報から「メインの作業:今の具体的な作業」形式で40文字以内の日本語で要約せよ。
-ルール:
-- 必ず「メインの作業:具体的な作業内容」のコロン区切り形式にする
-- コロンの前=最初の指示から判断するセッション全体のテーマ(短く)
-- コロンの後=最近の指示から判断する今まさにやっていること(「〜中」で終える)
+            content: `セッション情報から40文字以内の日本語1行で要約せよ。
+
+出力形式: <テーマ>:<直近論点>
+- テーマ = 最初の指示から判断するセッション全体の主題(短い名詞句)
+- 直近論点 = 最近の指示から判断する直近の具体論点
+- 進捗や次の行動は推測しない
+- 抽象語を避け、機能名や設定名を優先
+- 不確実なら最近の質問を短く言い換える
 - 接頭辞・装飾不要
-良い例: "statusline改善:要約プロンプト調整中", "OAuth対応:キャッシュTTL変更中", "バグ修正:ログ出力のフォーマット修正中"
-悪い例: "ステータスライン機能追加", "セッション管理の改善"
+
+良い例: "statusline改善:要約形式の見直し", "OAuth対応:キャッシュTTLの扱い", "tmux設定:pane移動キーの競合"
+悪い例: "statusline改善:調整中", "dotfiles改善:いろいろ修正"
 
 最初の指示:
 ${firstMessage}${recentPart}`,
@@ -427,7 +431,12 @@ async function main() {
 
   const sep = `${GRAY} │ ${RESET}`;
 
-  // Line 1: model | dir | lines | branch
+  // Line 1: Session summary (top priority — resumption cue)
+  if (sessionSummary) {
+    console.log(`${YELLOW}📋 ${sessionSummary}${RESET}`);
+  }
+
+  // Line 2: model | dir | lines | branch
   const infoParts = [`${CYAN}󰛩  ${model}${RESET}`, `  ${dir}`];
   if (linesAdded || linesRemoved) {
     infoParts.push(`✏️ +${linesAdded}/-${linesRemoved}`);
@@ -440,7 +449,7 @@ async function main() {
   }
   const infoStr = infoParts.join(sep);
 
-  // Line 2: context bar | duration | 200k warning
+  // Line 3: context bar | duration | 200k warning
   const warn = exceeds200k ? ` ${RED}⚠ 200k+${RESET}` : "";
   const contextStr = `${buildBar(pct)}${warn}${sep}󰥔 ${formatDuration(duration)}`;
 
@@ -459,22 +468,18 @@ async function main() {
     console.log(contextStr);
   }
 
-  // Session summary (separate line)
-  if (sessionSummary) {
-    console.log(`${YELLOW}📋 ${sessionSummary}${RESET}`);
-  }
-
-  // Rate limit
+  // Line 4: Rate limit (compressed to 1 line)
   if (usageCache) {
-    const fiveReset = formatResetTime(usageCache.five_hour.resets_at);
-    const sevenReset = formatResetTime(usageCache.seven_day.resets_at);
     const fiveColor = colorForPct(usageCache.five_hour.utilization);
     const sevenColor = colorForPct(usageCache.seven_day.utilization);
+    const fiveBar = buildBar(usageCache.five_hour.utilization);
+    const sevenBar = buildBar(usageCache.seven_day.utilization);
+    // Show reset time for whichever is higher utilization
+    const showReset = usageCache.five_hour.utilization >= usageCache.seven_day.utilization
+      ? usageCache.five_hour : usageCache.seven_day;
+    const resetStr = formatResetTime(showReset.resets_at);
     console.log(
-      `${fiveColor}⏱ 5h${RESET}  ${buildBar(usageCache.five_hour.utilization)}${fiveReset ? `  ${GRAY}Resets ${fiveReset}${RESET}` : ""}`,
-    );
-    console.log(
-      `${sevenColor}📅 7d${RESET}  ${buildBar(usageCache.seven_day.utilization)}${sevenReset ? `  ${GRAY}Resets ${sevenReset}${RESET}` : ""}`,
+      `${fiveColor}⏱5h${RESET} ${fiveBar}${sep}${sevenColor}📅7d${RESET} ${sevenBar}${resetStr ? `  ${GRAY}Resets ${resetStr}${RESET}` : ""}`,
     );
   }
 }
