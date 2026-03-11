@@ -324,8 +324,9 @@ ${firstMessage}${recentPart}`,
     const data = await resp.json();
     const text = data?.content?.[0]?.text?.trim() ?? "";
     // Discard if it looks like an explanation rather than a summary
-    if (!text || text === "-" || text.length > 60 || !text.includes(":")) return "";
-    return text.slice(0, 50);
+    if (!text || text === "-" || text.length > 60 || (!text.includes(":") && !text.includes("："))) return "";
+    // Normalize full-width colon to half-width for consistent display
+    return text.replace(/：/g, ":").slice(0, 50);
   } catch {
     return "";
   }
