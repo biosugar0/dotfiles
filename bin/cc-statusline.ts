@@ -323,6 +323,8 @@ ${firstMessage}${recentPart}`,
   }
 }
 
+const SUMMARY_IDLE_MS = 600_000; // 10min: stop refreshing after idle
+
 async function getSessionSummary(
   sessionId: string,
   transcriptPath: string,
@@ -332,19 +334,30 @@ async function getSessionSummary(
     await Deno.mkdir(SUMMARY_CACHE_DIR, { recursive: true });
   } catch { /* ignore */ }
 
+  // Check if session is idle (transcript not updated for 10min)
+  let idle = false;
+  try {
+    const stat = await Deno.stat(transcriptPath);
+    if (stat.mtime && Date.now() - stat.mtime.getTime() > SUMMARY_IDLE_MS) {
+      idle = true;
+    }
+  } catch { /* ignore */ }
+
   // Check cache with TTL
   try {
     const cached: SummaryCache = JSON.parse(
       await Deno.readTextFile(cacheFile),
     );
-    if (cached.summary && Date.now() - cached.updated_at < SUMMARY_CACHE_TTL_MS) {
+    if (cached.summary && (idle || Date.now() - cached.updated_at < SUMMARY_CACHE_TTL_MS)) {
       return cached.summary;
     }
+    if (idle) return cached.summary || "";
     // Stale — try refresh, fall back to stale
     const fresh = await refreshSummary(transcriptPath, cacheFile);
     return fresh || cached.summary || "";
   } catch { /* no cache */ }
 
+  if (idle) return "";
   // No cache — generate fresh
   return await refreshSummary(transcriptPath, cacheFile);
 }
