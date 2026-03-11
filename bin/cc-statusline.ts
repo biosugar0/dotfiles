@@ -67,15 +67,17 @@ function colorForPct(pct: number): string {
 }
 
 function buildBar(pct: number): string {
-  const filled = Math.round((pct * 10) / 100);
-  const empty = 10 - filled;
+  const filled = Math.round((pct * 5) / 100);
+  const empty = 5 - filled;
   const color = colorForPct(pct);
   return `${color}${"▰".repeat(filled)}${"▱".repeat(empty)} ${pct}%${RESET}`;
 }
 
 function formatDuration(ms: number): string {
-  const sec = Math.floor(ms / 1000);
-  return `${Math.floor(sec / 60)}m${sec % 60}s`;
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}h${m}m` : `${m}m`;
 }
 
 function visibleLength(s: string): number {
@@ -440,7 +442,7 @@ async function main() {
     console.log(`${YELLOW}📋 ${sessionSummary}${RESET}`);
   }
 
-  // Line 2: model | dir | lines | branch
+  // Line 2: model | dir | lines | branch | context bar | duration
   const infoParts = [`${CYAN}󰛩  ${model}${RESET}`, `  ${dir}`];
   if (linesAdded || linesRemoved) {
     infoParts.push(`✏️ +${linesAdded}/-${linesRemoved}`);
@@ -451,11 +453,9 @@ async function main() {
       : `󰘬  ${gitBranch}`;
     infoParts.push(branchLabel);
   }
+  infoParts.push(buildBar(pct));
+  infoParts.push(`󰥔 ${formatDuration(duration)}`);
   const infoStr = infoParts.join(sep);
-
-  // Line 3: context bar | duration | 200k warning
-  const warn = exceeds200k ? ` ${RED}⚠ 200k+${RESET}` : "";
-  const contextStr = `${buildBar(pct)}${warn}${sep}󰥔 ${formatDuration(duration)}`;
 
   let cols = 80;
   try {
@@ -463,13 +463,20 @@ async function main() {
   } catch {
     cols = parseInt(Deno.env.get("COLUMNS") ?? "80", 10) || 80;
   }
-  const singleLine = `${infoStr}${sep}${contextStr}`;
 
-  if (visibleLength(singleLine) <= cols) {
-    console.log(singleLine);
-  } else {
+  if (visibleLength(infoStr) <= cols) {
     console.log(infoStr);
-    console.log(contextStr);
+  } else {
+    // Fallback: split into two lines if too wide
+    const line2a = infoParts.slice(0, -2).join(sep);
+    const line2b = `${buildBar(pct)}${sep}󰥔 ${formatDuration(duration)}`;
+    console.log(line2a);
+    console.log(line2b);
+  }
+
+  // 200k warning (only when context > 80%)
+  if (exceeds200k && pct >= 80) {
+    console.log(`${RED}⚠ 200k+ context — consider compacting${RESET}`);
   }
 
   // Line 4: Rate limit (compressed to 1 line)
@@ -483,7 +490,7 @@ async function main() {
       ? usageCache.five_hour : usageCache.seven_day;
     const resetStr = formatResetTime(showReset.resets_at);
     console.log(
-      `${fiveColor}⏱5h${RESET} ${fiveBar}${sep}${sevenColor}📅7d${RESET} ${sevenBar}${resetStr ? `  ${GRAY}Resets ${resetStr}${RESET}` : ""}`,
+      `${fiveColor}⏱ 5h${RESET} ${fiveBar}${sep}${sevenColor}📅 7d${RESET} ${sevenBar}${resetStr ? `  ${GRAY}Resets ${resetStr}${RESET}` : ""}`,
     );
   }
 }
