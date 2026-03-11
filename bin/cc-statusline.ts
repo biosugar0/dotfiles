@@ -60,7 +60,7 @@ const CYAN = "\x1b[36m";
 
 const USAGE_CACHE_FILE = "/tmp/claude-usage-cache.json";
 const USAGE_CACHE_TTL_MS = 360_000; // 6min
-const USAGE_CACHE_STALE_MS = 1_800_000; // 30min: show stale data
+const USAGE_CACHE_STALE_MS = 86_400_000; // 24h: show stale data on API failure
 
 function colorForPct(pct: number): string {
   return pct >= 80 ? RED : pct >= 50 ? YELLOW : GREEN;
@@ -167,8 +167,9 @@ async function fetchUsage(): Promise<UsageCache | null> {
         Authorization: `Bearer ${token}`,
         "anthropic-beta": "oauth-2025-04-20",
       },
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(5000),
     });
+    if (!resp.ok) return null;
     const data = await resp.json();
     if (data?.error || data?.type === "error") return null;
     const cache: UsageCache = {
