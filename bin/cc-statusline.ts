@@ -32,6 +32,8 @@ type StatusLineInput = {
     branch?: string;
     original_repo_dir?: string;
   };
+  session_id?: string;
+  transcript_path?: string;
 };
 
 type UsageCache = {
@@ -39,6 +41,14 @@ type UsageCache = {
   five_hour: { utilization: number; resets_at: string };
   seven_day: { utilization: number; resets_at: string };
 };
+
+type SummaryCache = {
+  summary: string;
+  updated_at: number;
+};
+
+const SUMMARY_CACHE_DIR = "/tmp/claude-session-summaries";
+const SUMMARY_CACHE_TTL_MS = 300_000; // 5min
 
 // RGB colors (from article: better visibility)
 const RESET = "\x1b[0m";
@@ -199,6 +209,159 @@ async function getUsage(): Promise<UsageCache | null> {
   }
 }
 
+async function getFirstUserMessage(transcriptPath: string): Promise<string> {
+  try {
+    const file = await Deno.open(transcriptPath, { read: true });
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const chunk = new Uint8Array(4096);
+    // Read up to 64KB to find first user message
+    for (let total = 0; total < 65536; ) {
+      const n = await file.read(chunk);
+      if (!n) break;
+      total += n;
+      buffer += decoder.decode(chunk.subarray(0, n), { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const obj = JSON.parse(line);
+          if (obj.type === "user" && typeof obj.message?.content === "string") {
+            file.close();
+            return obj.message.content.slice(0, 500);
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+    file.close();
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+async function getRecentUserMessages(
+  transcriptPath: string,
+  maxMessages = 3,
+): Promise<string[]> {
+  try {
+    const stat = await Deno.stat(transcriptPath);
+    const fileSize = stat.size ?? 0;
+    // Read last 64KB
+    const readSize = Math.min(fileSize, 65536);
+    const file = await Deno.open(transcriptPath, { read: true });
+    await file.seek(-readSize, Deno.SeekMode.End);
+    const buf = new Uint8Array(readSize);
+    await file.read(buf);
+    file.close();
+    const text = new TextDecoder().decode(buf);
+    const messages: string[] = [];
+    for (const line of text.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const obj = JSON.parse(line);
+        if (obj.type === "user" && typeof obj.message?.content === "string") {
+          messages.push(obj.message.content.slice(0, 200));
+        }
+      } catch {
+        continue;
+      }
+    }
+    return messages.slice(-maxMessages);
+  } catch {
+    return [];
+  }
+}
+
+async function summarizeWithHaiku(
+  firstMessage: string,
+  recentMessages: string[],
+  token: string,
+): Promise<string> {
+  try {
+    const recentPart = recentMessages.length > 0
+      ? `\n\n最近の指示:\n${recentMessages.map((m, i) => `${i + 1}. ${m}`).join("\n")}`
+      : "";
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "oauth-2025-04-20",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: `以下のセッション情報から、今何をしているか30文字以内の日本語で要約。名詞句で。接頭辞や装飾不要。最近の指示があればそちらを優先。例: "statuslineにsummary追加"\n\n最初の指示:\n${firstMessage}${recentPart}`,
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+    const data = await resp.json();
+    const text = data?.content?.[0]?.text?.trim() ?? "";
+    return text.slice(0, 40);
+  } catch {
+    return "";
+  }
+}
+
+async function getSessionSummary(
+  sessionId: string,
+  transcriptPath: string,
+): Promise<string> {
+  const cacheFile = `${SUMMARY_CACHE_DIR}/${sessionId}.json`;
+  try {
+    await Deno.mkdir(SUMMARY_CACHE_DIR, { recursive: true });
+  } catch { /* ignore */ }
+
+  // Check cache with TTL
+  try {
+    const cached: SummaryCache = JSON.parse(
+      await Deno.readTextFile(cacheFile),
+    );
+    if (cached.summary && Date.now() - cached.updated_at < SUMMARY_CACHE_TTL_MS) {
+      return cached.summary;
+    }
+    // Stale — try refresh, fall back to stale
+    const fresh = await refreshSummary(transcriptPath, cacheFile);
+    return fresh || cached.summary || "";
+  } catch { /* no cache */ }
+
+  // No cache — generate fresh
+  return await refreshSummary(transcriptPath, cacheFile);
+}
+
+async function refreshSummary(
+  transcriptPath: string,
+  cacheFile: string,
+): Promise<string> {
+  const [firstMsg, recentMsgs] = await Promise.all([
+    getFirstUserMessage(transcriptPath),
+    getRecentUserMessages(transcriptPath),
+  ]);
+  if (!firstMsg) return "";
+
+  const token = await getTokenFromKeychain();
+  if (!token) return "";
+
+  const summary = await summarizeWithHaiku(firstMsg, recentMsgs, token);
+  if (summary) {
+    const cache: SummaryCache = { summary, updated_at: Date.now() };
+    try {
+      await Deno.writeTextFile(cacheFile, JSON.stringify(cache));
+    } catch { /* ignore */ }
+  }
+  return summary;
+}
+
 function formatResetTime(isoStr: string): string {
   if (!isoStr) return "";
   try {
@@ -228,11 +391,14 @@ async function main() {
   const linesRemoved = input.cost?.total_lines_removed ?? 0;
   const exceeds200k = input.exceeds_200k_tokens ?? false;
 
-  const [gitBranch, usageCache] = await Promise.all([
+  const [gitBranch, usageCache, sessionSummary] = await Promise.all([
     input.worktree?.branch
       ? Promise.resolve(input.worktree.branch)
       : getGitBranch(input.workspace?.current_dir),
     getUsage(),
+    input.session_id && input.transcript_path
+      ? getSessionSummary(input.session_id, input.transcript_path)
+      : Promise.resolve(""),
   ]);
 
   const sep = `${GRAY} │ ${RESET}`;
@@ -269,7 +435,12 @@ async function main() {
     console.log(contextStr);
   }
 
-  // Lines 3-4: rate limit
+  // Session summary (separate line)
+  if (sessionSummary) {
+    console.log(`${YELLOW}📋 ${sessionSummary}${RESET}`);
+  }
+
+  // Rate limit
   if (usageCache) {
     const fiveReset = formatResetTime(usageCache.five_hour.resets_at);
     const sevenReset = formatResetTime(usageCache.seven_day.resets_at);
