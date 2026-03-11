@@ -309,6 +309,7 @@ async function summarizeWithHaiku(
 - 抽象語を避け、機能名や設定名を優先
 - 不確実なら最近の質問を短く言い換える
 - 接頭辞・装飾不要
+- 情報不足で要約できない場合は「-」とだけ出力
 
 良い例: "statusline改善:要約形式の見直し", "OAuth対応:キャッシュTTLの扱い", "tmux設定:pane移動キーの競合"
 悪い例: "statusline改善:調整中", "dotfiles改善:いろいろ修正"
@@ -322,7 +323,9 @@ ${firstMessage}${recentPart}`,
     });
     const data = await resp.json();
     const text = data?.content?.[0]?.text?.trim() ?? "";
-    return text.slice(0, 40);
+    // Discard if it looks like an explanation rather than a summary
+    if (!text || text === "-" || text.length > 60 || !text.includes(":")) return "";
+    return text.slice(0, 50);
   } catch {
     return "";
   }
