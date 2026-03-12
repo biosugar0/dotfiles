@@ -21,6 +21,10 @@
       "command": "npx",
       "args": ["-y", "@mizchi/readability", "--mcp"],
       "env": {}
+    },
+    "datadog": {
+      "type": "http",
+      "url": "https://mcp.ap1.datadoghq.com/api/unstable/mcp-server/mcp"
     }
   }
 }
