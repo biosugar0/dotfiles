@@ -96,7 +96,7 @@ presets:
   # AI/LLMツール共通
   ai-tools:
     allow:
-      - "$CLAUDE_CONFIG_DIR"
+      - "$CLAUDE_CONFIG_DIR/"
       - "$HOME/.claude/"
       - "$HOME/.codex/"
       - "$HOME/.serena/"
@@ -123,7 +123,7 @@ presets:
       - "$HOME/Downloads/"
       - "$HOME/Desktop/"
       # AI/LLM
-      - "$CLAUDE_CONFIG_DIR"
+      - "$CLAUDE_CONFIG_DIR/"
       - "$HOME/.claude/"
       - "$HOME/.codex/"
       - "$HOME/.serena/"
