@@ -55,8 +55,6 @@ brew "shfmt"
 brew "stylua"
 brew "yamllint"
 
-# Observability
-brew "datadog-labs/pack/pup"
 
 # Infrastructure
 brew "awscli"
