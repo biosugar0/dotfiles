@@ -160,11 +160,21 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|resume|compact",
+        "matcher": "compact",
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.config/claude/hooks/session-start.sh",
+            "command": "$HOME/.config/claude/hooks/session-start.ts",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/session-start.ts",
             "timeout": 10
           }
         ]
@@ -176,7 +186,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.config/claude/hooks/pre-compact-save.sh",
+            "command": "$HOME/.config/claude/hooks/pre-compact-save.ts",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "auto|manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/post-compact-save.sh",
             "timeout": 10
           }
         ]
@@ -349,5 +371,6 @@
   "spinnerVerbs": {"mode": "replace", "verbs": ["かたかた", "もくもく"]},
   "language": "Japanese",
   "alwaysThinkingEnabled": true,
-  "skipDangerousModePermissionPrompt": true
+  "skipDangerousModePermissionPrompt": true,
+  "remoteControlEnabled": true
 }
