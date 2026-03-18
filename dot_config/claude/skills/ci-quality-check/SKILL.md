@@ -1,6 +1,8 @@
 ---
 name: ci-quality-check
-description: Quality check after code changes. Analyzes CI configuration and runs lint, format, type check, and tests locally. コード変更後の品質チェック。
+description: >-
+  Use when: コード変更後、lint/format/type check/テスト実行が必要、CI相当のチェックをローカルで
+  行いたい場面。
 context: fork
 agent: ci-quality-checker
 ---

@@ -1,6 +1,8 @@
 ---
 name: drawio
-description: "Create and edit draw.io (.drawio) diagrams. Auto-triggers when creating architecture diagrams, flowcharts, sequence diagrams, ER diagrams, etc. Supports AWS architecture diagrams."
+description: >-
+  Use when creating or editing diagrams - architecture, flowchart, sequence, ER, AWS構成図、
+  .drawio ファイル、図を描いて、ダイアグラム。
 ---
 
 Read ./INSTRUCTIONS.md and follow the instructions.

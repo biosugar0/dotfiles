@@ -1,9 +1,8 @@
 ---
 name: verification-before-completion
 description: >-
-  Use when about to claim work is complete, fixed, or passing - requires running verification commands
-  and confirming output before making any success claims. Evidence before assertions.
-  完了・修正・成功を主張する前に検証コマンドを実行し、証拠を確認する。
+  Use when about to claim work is complete, fixed, passing, or done - before commit, PR, or
+  moving to next task. 完了、修正、成功の主張前、commit/PR作成前、次タスク移行前。
 user-invocable: false
 ---
 

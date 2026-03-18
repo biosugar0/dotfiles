@@ -1,7 +1,7 @@
 ---
 name: git-worktree
 description: |
-  Support parallel development using Git worktree. Operates worktrees via the git gtr command.
+  Use when: worktree、ワークツリー、別ブランチで作業、並列開発、git gtr。
 
   【必須発動キーワード】以下を含む発言時は必ずこのスキルを呼び出すこと:
   - 「worktree」「ワークツリー」

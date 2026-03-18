@@ -1,6 +1,8 @@
 ---
 name: long-running-agent
-description: Auto-triggers when detecting large-scale tasks spanning multiple context windows. Applies optimal patterns for session splitting, progress saving, and handoff.
+description: >-
+  Use when: large-scale task spanning multiple context windows, コンテキストウィンドウを超える
+  大規模タスク、長時間作業、セッション分割が必要な場面。
 user-invocable: false
 ---
 

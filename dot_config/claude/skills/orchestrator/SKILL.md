@@ -1,7 +1,6 @@
 ---
 name: orchestrator
 description: |
-  Decompose tasks into sequential steps and parallel subtasks for efficient execution.
   Use when: 3つ以上の独立サブタスクがある、複数ファイルの並列変更、
   テスト・lint・commitの一括実行、調査と実装の段階的実行が必要な場合。
 

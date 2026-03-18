@@ -1,9 +1,8 @@
 ---
 name: receiving-code-review
 description: >-
-  Use when receiving code review feedback, before implementing suggestions - requires technical
-  verification, not performative agreement or blind implementation.
-  コードレビューのフィードバック受領時に使用。技術的検証が必要、パフォーマティブな同意や盲目的実装は禁止。
+  Use when receiving code review feedback, PR comments, or inline suggestions - before implementing
+  any reviewer's suggestion. レビュー指摘、PRコメント、修正依頼を受けた場面。
 user-invocable: false
 ---
 
