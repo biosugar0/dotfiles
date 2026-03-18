@@ -6,7 +6,7 @@ Modern macOS dotfiles with chezmoi, AI-first development, and Japanese input sup
 
 - **Dotfile Management** – chezmoi with templates for macOS-specific setup
 - **Terminal Stack** – WezTerm + tmux + Neovim with seamless integration
-- **AI-First Tooling** – Claude Code with Serena MCP, editprompt, git-worktree-runner
+- **AI-First Tooling** – Claude Code with Serena MCP, editprompt, git-wt
 - **Japanese Support** – SKKeleton for Neovim, IME-friendly keybindings
 - **Modern CLI** – bat, eza, fd, ripgrep, fzf, delta, starship
 
@@ -28,7 +28,7 @@ The installer handles:
 - Homebrew packages (Brewfile)
 - chezmoi dotfile application
 - tmux plugin manager (tpm)
-- git-worktree-runner
+- git-wt
 - editprompt
 
 ## Shell & Terminal
@@ -63,7 +63,7 @@ The installer handles:
 | Serena MCP | Codebase exploration |
 | Context7 MCP | Library documentation |
 | editprompt | Prompt engineering in editor |
-| git-worktree-runner | Parallel branch development |
+| git-wt | Parallel branch development |
 | cage | Sandboxing with smart presets |
 
 ## Key Bindings

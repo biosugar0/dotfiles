@@ -23,11 +23,11 @@ if ! command -v chezmoi &>/dev/null; then
 	brew install chezmoi
 fi
 
-# Clone repos required by chezmoi symlinks (must run before chezmoi apply)
-if command -v ghq &>/dev/null; then
-	if [[ ! -d "$HOME/ghq/github.com/coderabbitai/git-worktree-runner" ]]; then
-		echo "Cloning git-worktree-runner..."
-		ghq get coderabbitai/git-worktree-runner
+# git-wt (git worktree manager)
+if command -v go &>/dev/null; then
+	if ! command -v git-wt &>/dev/null; then
+		echo "Installing git-wt..."
+		go install github.com/k1LoW/git-wt@latest
 	fi
 fi
 
@@ -41,11 +41,6 @@ if [[ ! -d "$HOME/.config/tmux/plugins/tpm" ]]; then
 	git clone https://github.com/tmux-plugins/tpm "$HOME/.config/tmux/plugins/tpm"
 fi
 
-# git-worktree-runner (git gtr)
-if command -v ghq &>/dev/null; then
-	mkdir -p "$HOME/.local/bin"
-	ln -sf "$HOME/ghq/github.com/coderabbitai/git-worktree-runner/bin/git-gtr" "$HOME/.local/bin/git-gtr"
-fi
 
 # playwright-ext-token
 DOTFILES_DIR="$HOME/ghq/github.com/biosugar0/dotfiles"
