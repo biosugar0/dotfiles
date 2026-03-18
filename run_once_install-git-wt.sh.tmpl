@@ -3,9 +3,13 @@
 set -euo pipefail
 
 if ! command -v git-wt &>/dev/null; then
-  echo "==> Installing git-wt..."
-  go install github.com/k1LoW/git-wt@latest
-  echo "==> git-wt installed"
+  if command -v go &>/dev/null; then
+    echo "==> Installing git-wt..."
+    go install github.com/k1LoW/git-wt@latest
+    echo "==> git-wt installed"
+  else
+    echo "==> Skipping git-wt (go not found)"
+  fi
 else
   echo "==> git-wt already installed"
 fi
