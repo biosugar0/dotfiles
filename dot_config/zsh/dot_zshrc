@@ -164,38 +164,40 @@ alias gu='ghq list smartmat| ghq get --update --parallel'
 alias ghroot='cd $(ghq root)/github.com'
 alias gitclean='git branch --merged|egrep -v "\*|develop|master"|xargs git branch -d && git fetch --prune'
 
-# git worktree (git gtr)
-alias gwn='git gtr new'
-alias gwl='git gtr list'
-gwr() {
-  local selected name
-  selected=$(git gtr list --porcelain 2>/dev/null | fzf --delimiter='\t' \
-    --with-nth=2 \
-    --preview 'git -C {1} log --oneline -10' \
-    --preview-window=right:50%)
-  [[ -n "$selected" ]] && name=$(echo "$selected" | cut -f2) && git gtr rm "$name"
+# git worktree (git-wt)
+eval "$(git wt --init zsh 2>/dev/null)"
+alias gwl='git wt'
+gwn() {
+  # git wt <branch> [<start-point>] で作成
+  git wt --nocd "$@"
 }
-alias gwra='git gtr rm --all'
-gwa() {
-  local selected name
-  selected=$(git gtr list --porcelain 2>/dev/null | fzf --delimiter='\t' \
+gwr() {
+  local selected path branch
+  selected=$(git wt --json 2>/dev/null | jq -r '.[] | select(.bare == false) | "\(.path)\t\(.branch)"' | fzf --delimiter='\t' \
     --with-nth=2 \
     --preview 'git -C {1} log --oneline -10' \
     --preview-window=right:50%)
-  [[ -n "$selected" ]] && name=$(echo "$selected" | cut -f2) && git gtr ai "$name" -- "$@"
+  [[ -n "$selected" ]] && branch=$(echo "$selected" | cut -f2) && git wt -d "$branch"
+}
+gwa() {
+  local selected path
+  selected=$(git wt --json 2>/dev/null | jq -r '.[] | select(.bare == false) | "\(.path)\t\(.branch)"' | fzf --delimiter='\t' \
+    --with-nth=2 \
+    --preview 'git -C {1} log --oneline -10' \
+    --preview-window=right:50%)
+  [[ -n "$selected" ]] && path=$(echo "$selected" | cut -f1) && (cd "$path" && cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config $XDG_CONFIG_HOME/claude/mcp.json "$@")
 }
 gwe() {
-  local selected name
-  selected=$(git gtr list --porcelain 2>/dev/null | fzf --delimiter='\t' \
+  local selected path
+  selected=$(git wt --json 2>/dev/null | jq -r '.[] | select(.bare == false) | "\(.path)\t\(.branch)"' | fzf --delimiter='\t' \
     --with-nth=2 \
     --preview 'git -C {1} log --oneline -10' \
     --preview-window=right:50%)
-  [[ -n "$selected" ]] && name=$(echo "$selected" | cut -f2) && git gtr editor "$name"
+  [[ -n "$selected" ]] && path=$(echo "$selected" | cut -f1) && cursor "$path"
 }
-alias gwrun='git gtr run'
 gw() {
-  local selected
-  selected=$(git gtr list --porcelain 2>/dev/null | fzf --delimiter='\t' \
+  local selected path
+  selected=$(git wt --json 2>/dev/null | jq -r '.[] | select(.bare == false) | "\(.path)\t\(.branch)"' | fzf --delimiter='\t' \
     --with-nth=2 \
     --preview 'git -C {1} log --oneline -10' \
     --preview-window=right:50%)

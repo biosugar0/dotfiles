@@ -43,7 +43,8 @@
 	path = ~/.config/git/config-biosugar0
 [ghq]
 	root = ~/ghq
-[gtr "ai"]
-	default = claude
-[gtr "editor"]
-	default = nvim
+[wt]
+	basedir = .wt
+	copyignored = true
+	copy = .claude/settings.local.json
+	copy = .env*

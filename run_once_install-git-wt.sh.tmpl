@@ -1,0 +1,12 @@
+#!/bin/bash
+{{- if eq .chezmoi.os "darwin" }}
+set -euo pipefail
+
+if ! command -v git-wt &>/dev/null; then
+  echo "==> Installing git-wt..."
+  go install github.com/k1LoW/git-wt@latest
+  echo "==> git-wt installed"
+else
+  echo "==> git-wt already installed"
+fi
+{{- end }}
