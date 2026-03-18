@@ -13,8 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install chezmoi
-        run: brew install chezmoi
+      - name: Install dependencies
+        run: brew install chezmoi go
 
       - name: Apply dotfiles (dry-run)
         run: chezmoi init --source=$PWD --apply --dry-run
