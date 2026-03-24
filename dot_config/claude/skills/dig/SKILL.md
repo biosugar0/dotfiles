@@ -13,6 +13,7 @@ allowed-tools:
   - Grep
   - Glob
   - AskUserQuestion
+effort: high
 ---
 
 Read ./INSTRUCTIONS.md and follow the instructions.

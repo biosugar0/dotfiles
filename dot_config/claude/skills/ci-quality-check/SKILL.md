@@ -5,6 +5,7 @@ description: >-
   行いたい場面。
 context: fork
 agent: ci-quality-checker
+effort: low
 ---
 
 Read ./INSTRUCTIONS.md and follow the instructions.

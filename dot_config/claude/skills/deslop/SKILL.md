@@ -12,6 +12,7 @@ allowed-tools:
   - Bash
   - Grep
   - Glob
+effort: high
 ---
 
 Read ./INSTRUCTIONS.md and follow the instructions.
