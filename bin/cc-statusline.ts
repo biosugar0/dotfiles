@@ -425,8 +425,8 @@ async function main() {
 
   // Line 4: Rate limit (compressed to 1 line)
   if (rateLimits?.five_hour || rateLimits?.seven_day) {
-    const fivePct = rateLimits.five_hour?.used_percentage ?? 0;
-    const sevenPct = rateLimits.seven_day?.used_percentage ?? 0;
+    const fivePct = Math.round(rateLimits.five_hour?.used_percentage ?? 0);
+    const sevenPct = Math.round(rateLimits.seven_day?.used_percentage ?? 0);
     const fiveColor = colorForPct(fivePct);
     const sevenColor = colorForPct(sevenPct);
     const fiveBar = buildBar(fivePct);
