@@ -129,6 +129,8 @@ async function findKeychainServices(): Promise<string[]> {
 }
 
 async function getTokenFromKeychain(): Promise<string | null> {
+  const envToken = Deno.env.get("CLAUDE_CODE_OAUTH_TOKEN");
+  if (envToken) return envToken;
   try {
     for (const svc of await findKeychainServices()) {
       try {
