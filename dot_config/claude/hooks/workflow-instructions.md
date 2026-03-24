@@ -21,12 +21,17 @@ codex MCPは使わない。必ず最初にtmux paneを作成してからcodexと
 議論は複数ターンを基本とし、質問は単目的にする。
 codexは自分でファイルを読めるので内容全体を渡す必要はない。
 
+## ブランチ作成前
+
+worktree or ブランチ作成前に `git fetch origin main` でリモートを取得し、`origin/main` ベースで作成する。
+ローカル main が古いと plan に無関係な drift が出て判断を誤る。
+
 ## Skill発動ガイド
 
 - コード変更後 → ci-quality-check
 - コミット時 → safe-commit
 - 3+独立タスク → orchestrator
 - ライブラリ調査 → context7-docs
-- plan/specの曖昧点 → dig
+- plan/specの曖昧点チェック、ユーザーへの確認 → dig
 - ブラウザでの検証が必要 → playwright skill（CLI）
 - codexと議論/調査依頼 → codex-tmux
