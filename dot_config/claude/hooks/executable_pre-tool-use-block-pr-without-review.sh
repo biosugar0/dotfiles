@@ -5,8 +5,8 @@ input=$(cat)
 
 command=$(echo "$input" | jq -r '.tool_input.command // empty')
 
-# gh pr create のみをチェック
-if echo "$command" | grep -qE '^gh pr create( |$)'; then
+# gh pr create をチェック（cd && gh pr create 等のパターンも検出）
+if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
   head=$(git rev-parse --short HEAD 2>/dev/null)
   marker="/tmp/.codex-review-done-${head}"
   if [ ! -f "$marker" ]; then
