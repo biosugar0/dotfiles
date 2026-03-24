@@ -1,9 +1,10 @@
-model = "gpt-5.3-codex"
+model = "gpt-5.4"
 disable_response_storage = true
 sandbox_mode = "workspace-write"
 model_reasoning_effort = "high"
 web_search = "live"
-[features] 
+
+[features]
 voice_transcription = true
 
 [sandbox_workspace_write]
