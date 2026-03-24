@@ -23,6 +23,10 @@ type StatusLineInput = {
     total_lines_added?: number;
     total_lines_removed?: number;
   };
+  rate_limits?: {
+    five_hour?: { used_percentage: number; resets_at: number };
+    seven_day?: { used_percentage: number; resets_at: number };
+  };
   exceeds_200k_tokens?: boolean;
   vim?: { mode?: string };
   agent?: { name?: string };
@@ -34,12 +38,6 @@ type StatusLineInput = {
   };
   session_id?: string;
   transcript_path?: string;
-};
-
-type UsageCache = {
-  fetched_at: number;
-  five_hour: { utilization: number; resets_at: string };
-  seven_day: { utilization: number; resets_at: string };
 };
 
 type SummaryCache = {
@@ -57,10 +55,6 @@ const YELLOW = "\x1b[38;2;229;192;123m";
 const RED = "\x1b[38;2;224;108;117m";
 const GRAY = "\x1b[38;2;74;88;92m";
 const CYAN = "\x1b[36m";
-
-const USAGE_CACHE_FILE = "/tmp/claude-usage-cache.json";
-const USAGE_CACHE_TTL_MS = 360_000; // 6min
-const USAGE_CACHE_STALE_MS = 86_400_000; // 24h: show stale data on API failure
 
 function colorForPct(pct: number): string {
   return pct >= 80 ? RED : pct >= 50 ? YELLOW : GREEN;
@@ -157,58 +151,6 @@ async function getTokenFromKeychain(): Promise<string | null> {
     return null;
   } catch {
     return null;
-  }
-}
-
-async function fetchUsage(): Promise<UsageCache | null> {
-  try {
-    const token = await getTokenFromKeychain();
-    if (!token) return null;
-    const resp = await fetch("https://api.anthropic.com/api/oauth/usage", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "anthropic-beta": "oauth-2025-04-20",
-      },
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    if (data?.error || data?.type === "error") return null;
-    const cache: UsageCache = {
-      fetched_at: Math.floor(Date.now() / 1000),
-      five_hour: {
-        utilization: Math.round(data.five_hour?.utilization ?? 0),
-        resets_at: data.five_hour?.resets_at ?? "",
-      },
-      seven_day: {
-        utilization: Math.round(data.seven_day?.utilization ?? 0),
-        resets_at: data.seven_day?.resets_at ?? "",
-      },
-    };
-    await Deno.writeTextFile(USAGE_CACHE_FILE, JSON.stringify(cache));
-    return cache;
-  } catch {
-    return null;
-  }
-}
-
-async function getUsage(): Promise<UsageCache | null> {
-  try {
-    const stat = await Deno.stat(USAGE_CACHE_FILE);
-    const age = stat.mtime ? Date.now() - stat.mtime.getTime() : Infinity;
-    if (age <= USAGE_CACHE_TTL_MS) {
-      return JSON.parse(await Deno.readTextFile(USAGE_CACHE_FILE));
-    }
-    // Cache stale — try refresh, fall back to stale data
-    const fresh = await fetchUsage();
-    if (fresh) return fresh;
-    if (age <= USAGE_CACHE_STALE_MS) {
-      return JSON.parse(await Deno.readTextFile(USAGE_CACHE_FILE));
-    }
-    return null;
-  } catch {
-    // No cache — try fetch
-    return await fetchUsage();
   }
 }
 
@@ -396,10 +338,10 @@ async function refreshSummary(
   return summary;
 }
 
-function formatResetTime(isoStr: string): string {
-  if (!isoStr) return "";
+function formatResetTime(epochSec: number): string {
+  if (!epochSec) return "";
   try {
-    const d = new Date(isoStr);
+    const d = new Date(epochSec * 1000);
     return new Intl.DateTimeFormat("ja-JP", {
       timeZone: "Asia/Tokyo",
       month: "2-digit",
@@ -425,15 +367,15 @@ async function main() {
   const linesRemoved = input.cost?.total_lines_removed ?? 0;
   const exceeds200k = input.exceeds_200k_tokens ?? false;
 
-  const [gitBranch, usageCache, sessionSummary] = await Promise.all([
+  const [gitBranch, sessionSummary] = await Promise.all([
     input.worktree?.branch
       ? Promise.resolve(input.worktree.branch)
       : getGitBranch(input.workspace?.current_dir),
-    getUsage(),
     input.session_id && input.transcript_path
       ? getSessionSummary(input.session_id, input.transcript_path)
       : Promise.resolve(""),
   ]);
+  const rateLimits = input.rate_limits;
 
   const sep = `${GRAY} │ ${RESET}`;
 
@@ -480,15 +422,17 @@ async function main() {
   }
 
   // Line 4: Rate limit (compressed to 1 line)
-  if (usageCache) {
-    const fiveColor = colorForPct(usageCache.five_hour.utilization);
-    const sevenColor = colorForPct(usageCache.seven_day.utilization);
-    const fiveBar = buildBar(usageCache.five_hour.utilization);
-    const sevenBar = buildBar(usageCache.seven_day.utilization);
+  if (rateLimits?.five_hour || rateLimits?.seven_day) {
+    const fivePct = rateLimits.five_hour?.used_percentage ?? 0;
+    const sevenPct = rateLimits.seven_day?.used_percentage ?? 0;
+    const fiveColor = colorForPct(fivePct);
+    const sevenColor = colorForPct(sevenPct);
+    const fiveBar = buildBar(fivePct);
+    const sevenBar = buildBar(sevenPct);
     // Show reset time for whichever is higher utilization
-    const showReset = usageCache.five_hour.utilization >= usageCache.seven_day.utilization
-      ? usageCache.five_hour : usageCache.seven_day;
-    const resetStr = formatResetTime(showReset.resets_at);
+    const showReset = fivePct >= sevenPct
+      ? rateLimits.five_hour : rateLimits.seven_day;
+    const resetStr = showReset?.resets_at ? formatResetTime(showReset.resets_at) : "";
     console.log(
       `${fiveColor}⏱ 5h${RESET} ${fiveBar}${sep}${sevenColor}📅 7d${RESET} ${sevenBar}${resetStr ? `  ${GRAY}Resets ${resetStr}${RESET}` : ""}`,
     );
