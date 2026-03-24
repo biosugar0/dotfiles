@@ -95,7 +95,16 @@ tmux send-keys -t "$CODEX_PANE" Enter
 
 その後、Step 2→3を繰り返して応答を読み取る。
 
-### Step 5: 終了
+### Step 5: レビューマーカー作成
+
+PRレビュー目的でcodexと議論した場合、完了マーカーを作成する。
+これがないと `gh pr create` がhookでブロックされる。
+
+```bash
+touch "/tmp/.codex-review-done-$(git rev-parse --short HEAD 2>/dev/null)"
+```
+
+### Step 6: 終了
 
 議論が完了したらpaneを閉じて一時ファイルを削除する。
 
