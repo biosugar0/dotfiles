@@ -15,7 +15,13 @@ alias time='gtime'
 alias la='ls -la'
 alias awk='gawk'
 alias killclaude='pkill -f -i claude'
-alias claude='cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config $XDG_CONFIG_HOME/claude/mcp.json'
+claude() {
+  if [ $# -eq 0 ]; then
+    cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config $XDG_CONFIG_HOME/claude/mcp.json "/tasks pick"
+  else
+    cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config $XDG_CONFIG_HOME/claude/mcp.json "$@"
+  fi
+}
 alias codex='cage -preset claude-code -- env GIT_EDITOR=true codex --dangerously-bypass-approvals-and-sandbox'
 alias difit='npx difit'
 alias python=/opt/homebrew/bin/python3
