@@ -14,7 +14,7 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
   # コマンド内の絶対パスを抽出し、git リポジトリなら直接チェック
   while IFS= read -r p; do
     if [ -d "$p" ] && git -C "$p" rev-parse --git-dir &>/dev/null; then
-      r=$(basename "$(git -C "$p" rev-parse --show-toplevel 2>/dev/null)")
+      r=$(git -C "$p" remote get-url origin 2>/dev/null | sed 's/\.git$//;s|.*/||')
       b=$(git -C "$p" branch --show-current 2>/dev/null)
       h=$(git -C "$p" rev-parse --short HEAD 2>/dev/null)
       if [ -f "/tmp/.codex-review-done--${r}--${b}--${h}" ]; then
@@ -26,7 +26,7 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
 
   # hook_cwd でフォールバック
   if [ "$found" = false ]; then
-    r=$(basename "$(git -C "$hook_cwd" rev-parse --show-toplevel 2>/dev/null)")
+    r=$(git -C "$hook_cwd" remote get-url origin 2>/dev/null | sed 's/\.git$//;s|.*/||')
     b=$(git -C "$hook_cwd" branch --show-current 2>/dev/null)
     h=$(git -C "$hook_cwd" rev-parse --short HEAD 2>/dev/null)
     if [ -f "/tmp/.codex-review-done--${r}--${b}--${h}" ]; then
@@ -36,7 +36,7 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
 
   # repo名 glob フォールバック（変数経由cd等でパス抽出不可の場合）
   if [ "$found" = false ]; then
-    repo=$(basename "$(git -C "$hook_cwd" rev-parse --show-toplevel 2>/dev/null)")
+    repo=$(git -C "$hook_cwd" remote get-url origin 2>/dev/null | sed 's/\.git$//;s|.*/||')
     for marker in /tmp/.codex-review-done--"${repo}"--*; do
       if [ -f "$marker" ]; then
         found=true
