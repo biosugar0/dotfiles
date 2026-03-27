@@ -90,3 +90,26 @@ NG: Agent の報告を信頼
 - commit, PR 作成, タスク完了
 - 次のタスクへの移行
 - Agent への委任後の報告
+
+## 検証 Receipt の記録
+
+検証完了後、以下のコマンドで receipt を記録する（stop-hook が参照する）:
+
+```bash
+mkdir -p ai/state
+cat > ai/state/verification.json << VERIFY
+{
+  "head_sha": "$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')",
+  "verified_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "status": "{PASS|FAIL}",
+  "evidence": [
+    "{実行したコマンドと結果の要約}"
+  ]
+}
+VERIFY
+```
+
+- PASS: 全検証項目が証拠付きで確認された
+- FAIL: 1つ以上の検証が失敗
+
+**receipt は検証のたびに上書きする。** HEAD が変わったら古い receipt は無効。

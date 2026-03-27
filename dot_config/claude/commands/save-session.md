@@ -142,6 +142,53 @@ git show --stat
 - 作成したファイル: [新規作成・大幅変更したファイル]
 ```
 
+### 5.5 Context Reset 時の handoff.json 生成
+
+引数が "context-reset" の場合（ARGUMENTS に "context-reset" を含む場合）、markdown に加えて構造化された handoff.json も生成する。
+SessionStart hook が自動検出し、次のセッションにコンテキストを注入する。
+
+```bash
+if echo "$ARGUMENTS" | grep -qi "context-reset"; then
+    mkdir -p ai/state
+    # handoff.json を生成（エージェントが内容を埋める）
+fi
+```
+
+handoff.json の生成内容:
+
+```json
+{
+  "schema_version": 1,
+  "created_at": "ISO timestamp",
+  "task": {
+    "original_prompt": "ユーザーの元のリクエスト（会話から抽出）",
+    "spec_path": "plan ファイルパス（あれば）",
+    "feature_list_path": "feature_list.json（あれば）"
+  },
+  "progress": {
+    "completed": ["完了したタスクリスト（TodoList から）"],
+    "in_progress": "現在取り組んでいること",
+    "remaining": ["未着手タスクリスト（TodoList から）"],
+    "current_branch": "ブランチ名",
+    "last_commit": "HEAD SHA"
+  },
+  "decisions": [
+    {
+      "what": "重要な決定事項",
+      "why": "理由"
+    }
+  ],
+  "context": {
+    "key_files": ["重要なファイルパス"],
+    "gotchas": ["注意点、罠"],
+    "next_steps": ["具体的な次のアクション"]
+  }
+}
+```
+
+handoff.json は `ai/state/handoff.json` に保存する。
+markdown のセッションログと同時に生成し、markdown には handoff.json のパスを参考情報として記載する。
+
 ### 6. 保存確認とサマリー表示
 
 ```bash
