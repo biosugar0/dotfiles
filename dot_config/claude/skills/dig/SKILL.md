@@ -5,7 +5,6 @@ description: >-
   「これで大丈夫？」「もう少し詰めたい」「曖昧な点がある」といった場面。
 user-invocable: true
 argument-hint: "[plan-file]"
-context: fork
 allowed-tools:
   - Read
   - Write
