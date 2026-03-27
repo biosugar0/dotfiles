@@ -62,8 +62,11 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
         echo "evaluator: FAIL — $gate_summary（修正推奨）" >&2
       fi
     else
-      # workflow-gate.json が存在しない → evaluator 未実施の警告
-      echo "evaluator: 未実施。/evaluator で品質評価を実行することを推奨します。" >&2
+      # workflow-gate.json が存在しない → 変更が多い場合のみ evaluator 推奨
+      changed_count=$(git -C "$hook_cwd" diff --name-only origin/main...HEAD 2>/dev/null | wc -l | tr -d ' ')
+      if [ "${changed_count:-0}" -ge 5 ]; then
+        echo "evaluator: 未実施（変更ファイル ${changed_count} 件）。/evaluator で品質評価を推奨。" >&2
+      fi
     fi
   fi
 
