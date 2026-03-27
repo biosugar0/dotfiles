@@ -61,8 +61,10 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
         gate_summary=$(jq -r '.evaluator.summary // ""' "$gate_file")
         echo "evaluator: FAIL — $gate_summary（修正推奨）" >&2
       fi
+    else
+      # workflow-gate.json が存在しない → evaluator 未実施の警告
+      echo "evaluator: 未実施。/evaluator で品質評価を実行することを推奨します。" >&2
     fi
-    # workflow-gate.json がなくてもブロックしない（evaluator は soft recommendation）
   fi
 
   if [ "$found" = false ]; then

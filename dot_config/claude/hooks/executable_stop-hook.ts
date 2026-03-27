@@ -51,7 +51,8 @@ Rules:
 - APPROVE stop if: task is complete, Claude asks user a question, reports completion, or awaits input
 - BLOCK stop (continue) only if: Claude's last message shows mid-task work with clear next steps AND there are incomplete tasks that AI can finish without user input
 - If the user's request was a question and Claude answered it, APPROVE stop
-- If "Verification evidence: NONE" or "STALE" and Claude claims completion, prefer BLOCK (continue) to encourage verification
+- If "Verification evidence: NONE" or "STALE" and Claude claims completion, BLOCK (continue) to require verification first
+- If "Verification evidence: FAIL", BLOCK (continue) — verification failed, must fix before completing
 - If "Verification evidence: PASS", factor it positively into stop decision
 - Default: approve stop
 
