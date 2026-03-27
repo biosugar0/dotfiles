@@ -16,28 +16,20 @@ BRANCH=$(git -C "$PROJECT_DIR" branch --show-current 2>/dev/null || echo "unknow
 HEAD_SHA=$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DIRTY_COUNT=$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
 
-# 既存の handoff.json があれば last_commit を更新するだけ
-if [ -f "$HANDOFF_FILE" ]; then
-  # jq が使えれば使う、なければスキップ
-  if command -v jq &>/dev/null; then
-    tmp=$(mktemp)
-    jq --arg sha "$HEAD_SHA" --arg branch "$BRANCH" --arg dirty "$DIRTY_COUNT" \
-      '.progress.last_commit = $sha | .progress.current_branch = $branch | .progress.dirty_files = ($dirty | tonumber)' \
-      "$HANDOFF_FILE" > "$tmp" && mv "$tmp" "$HANDOFF_FILE"
-  fi
+# 既存の handoff.json がなければスキップ（自動生成しない）
+# handoff.json は /save-session context-reset で明示的に作成するもの
+if [ ! -f "$HANDOFF_FILE" ]; then
   exit 0
 fi
 
-# handoff.json がなければ最小限のスナップショットを作成
-mkdir -p "$(dirname "$HANDOFF_FILE")"
-cat > "$HANDOFF_FILE" << EOF
-{
-  "schema_version": 1,
-  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "progress": {
-    "current_branch": "$BRANCH",
-    "last_commit": "$HEAD_SHA",
-    "dirty_files": $DIRTY_COUNT
-  }
-}
-EOF
+# jq が使えなければスキップ
+if ! command -v jq &>/dev/null; then
+  exit 0
+fi
+
+# 既存の handoff.json を更新（created_at も更新して freshness を維持）
+NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+tmp=$(mktemp)
+jq --arg sha "$HEAD_SHA" --arg branch "$BRANCH" --arg dirty "$DIRTY_COUNT" --arg now "$NOW" \
+  '.created_at = $now | .progress.last_commit = $sha | .progress.current_branch = $branch | .progress.dirty_files = ($dirty | tonumber)' \
+  "$HANDOFF_FILE" > "$tmp" && mv "$tmp" "$HANDOFF_FILE"
