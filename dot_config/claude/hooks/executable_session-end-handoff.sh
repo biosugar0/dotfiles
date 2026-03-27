@@ -27,9 +27,14 @@ if ! command -v jq &>/dev/null; then
   exit 0
 fi
 
-# 既存の handoff.json を更新（created_at も更新して freshness を維持）
+# 既存の handoff.json を更新（created_at は触らない — freshness 判定の基準）
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 tmp=$(mktemp)
-jq --arg sha "$HEAD_SHA" --arg branch "$BRANCH" --arg dirty "$DIRTY_COUNT" --arg now "$NOW" \
-  '.created_at = $now | .progress.last_commit = $sha | .progress.current_branch = $branch | .progress.dirty_files = ($dirty | tonumber)' \
-  "$HANDOFF_FILE" > "$tmp" && mv "$tmp" "$HANDOFF_FILE"
+if jq --arg sha "$HEAD_SHA" --arg branch "$BRANCH" --arg dirty "$DIRTY_COUNT" --arg now "$NOW" \
+  '.updated_at = $now | .progress.last_commit = $sha | .progress.current_branch = $branch | .progress.dirty_files = ($dirty | tonumber)' \
+  "$HANDOFF_FILE" > "$tmp" 2>/dev/null; then
+  mv "$tmp" "$HANDOFF_FILE"
+else
+  rm -f "$tmp"
+  # JSON が壊れている場合は静かにスキップ
+fi
