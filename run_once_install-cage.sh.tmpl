@@ -3,8 +3,8 @@
 set -euo pipefail
 
 if ! command -v cage &>/dev/null; then
-  echo "==> Installing cage (with --no-quarantine)..."
-  brew install --cask Warashi/tap/cage --no-quarantine
+  echo "==> Installing cage..."
+  brew install --cask Warashi/tap/cage
 else
   echo "==> cage already installed"
 fi

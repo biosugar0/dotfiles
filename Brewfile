@@ -83,4 +83,4 @@ cask "font-cica"
 cask "font-hack-nerd-font"
 cask "font-monaspace"
 
-# cage is installed via run_once script with --no-quarantine
+# cage is installed via run_once script
