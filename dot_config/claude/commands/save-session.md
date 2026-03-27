@@ -142,6 +142,64 @@ git show --stat
 - 作成したファイル: [新規作成・大幅変更したファイル]
 ```
 
+### 5.5 Context Reset 時の handoff.json 生成
+
+引数が "context-reset" の場合（ARGUMENTS に "context-reset" を含む場合）、markdown に加えて構造化された handoff.json も生成する。
+SessionStart hook が自動検出し、次のセッションにコンテキストを注入する。
+
+引数が "context-reset" の場合、markdown に加えて `ai/state/handoff.json` を生成する。
+
+```bash
+if echo "$ARGUMENTS" | grep -qi "context-reset"; then
+    mkdir -p ai/state
+
+    BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+    HEAD_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+    # handoff.json を生成
+    # エージェントは以下のテンプレートの各フィールドを会話コンテキストから埋める
+    cat > ai/state/handoff.json << HANDOFF
+{
+  "schema_version": 1,
+  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "task": {
+    "original_prompt": "{ユーザーの元のリクエスト}",
+    "spec_path": "{plan ファイルパス（あれば空文字）}",
+    "feature_list_path": "{feature_list.json パス（あれば空文字）}"
+  },
+  "progress": {
+    "completed": ["{完了タスク1}", "{完了タスク2}"],
+    "in_progress": "{現在取り組んでいること}",
+    "remaining": ["{未着手タスク1}", "{未着手タスク2}"],
+    "current_branch": "$BRANCH",
+    "last_commit": "$HEAD_SHA"
+  },
+  "decisions": [
+    {
+      "what": "{重要な決定事項}",
+      "why": "{理由}"
+    }
+  ],
+  "context": {
+    "key_files": ["{重要なファイルパス1}"],
+    "gotchas": ["{注意点}"],
+    "next_steps": ["{次のアクション1}", "{次のアクション2}"]
+  }
+}
+HANDOFF
+
+    echo "handoff.json を生成しました: ai/state/handoff.json"
+    echo "SessionStart hook が次のセッション開始時に自動検出・注入します。"
+fi
+```
+
+**重要**: `{...}` プレースホルダーは実際の値に置き換えること。
+TodoList の状態、会話の経緯、重要な決定事項から抽出して埋める。
+`current_branch` と `last_commit` は自動取得される。
+
+handoff.json は `ai/state/handoff.json` に保存する。
+markdown のセッションログと同時に生成し、markdown には handoff.json のパスを参考情報として記載する。
+
 ### 6. 保存確認とサマリー表示
 
 ```bash

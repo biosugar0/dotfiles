@@ -51,6 +51,9 @@ Rules:
 - APPROVE stop if: task is complete, Claude asks user a question, reports completion, or awaits input
 - BLOCK stop (continue) only if: Claude's last message shows mid-task work with clear next steps AND there are incomplete tasks that AI can finish without user input
 - If the user's request was a question and Claude answered it, APPROVE stop
+- If "Verification evidence: NONE" or "STALE" and Claude claims completion of code changes, suggest running verification but do not hard-block (docs-only or config-only changes may not need verification)
+- If "Verification evidence: FAIL", BLOCK (continue) — verification failed, must fix before completing
+- If "Verification evidence: PASS", factor it positively into stop decision
 - Default: approve stop
 
 Call stop_decision with your judgment.`;
@@ -179,6 +182,38 @@ async function main(): Promise<void> {
       }
     }
 
+    // Check for verification evidence
+    let verificationNote = "";
+    const projectDir = Deno.env.get("CLAUDE_PROJECT_DIR") ?? Deno.cwd();
+    try {
+      const verifyPath = `${projectDir}/ai/state/verification.json`;
+      const verifyContent = await Deno.readTextFile(verifyPath);
+      const verify = JSON.parse(verifyContent);
+      const currentSha = await (async () => {
+        try {
+          const { stdout } = await new Deno.Command("git", {
+            args: ["rev-parse", "--short", "HEAD"],
+            stdout: "piped",
+            stderr: "null",
+            cwd: projectDir,
+          }).output();
+          return new TextDecoder().decode(stdout).trim();
+        } catch {
+          return "";
+        }
+      })();
+
+      if (verify.head_sha === currentSha && verify.status === "PASS") {
+        verificationNote = "\n\nVerification evidence: PASS (fresh, matching HEAD)";
+      } else if (verify.head_sha !== currentSha) {
+        verificationNote = "\n\nVerification evidence: STALE (HEAD changed since verification)";
+      } else {
+        verificationNote = `\n\nVerification evidence: ${verify.status}`;
+      }
+    } catch {
+      verificationNote = "\n\nVerification evidence: NONE (no verification.json found)";
+    }
+
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 256,
@@ -188,7 +223,7 @@ async function main(): Promise<void> {
       messages: [
         {
           role: "user",
-          content: `${userContext}Claude's last assistant message:\n\n${lastMessage}`,
+          content: `${userContext}Claude's last assistant message:\n\n${lastMessage}${verificationNote}`,
         },
       ],
     });

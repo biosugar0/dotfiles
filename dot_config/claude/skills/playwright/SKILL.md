@@ -6,6 +6,7 @@ description: >-
 user-invocable: true
 argument-hint: "[url]"
 allowed-tools: Bash(playwright-cli:*)
+effort: low
 ---
 
 Read ./INSTRUCTIONS.md and follow the instructions.

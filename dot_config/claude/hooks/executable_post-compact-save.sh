@@ -20,4 +20,29 @@ if [ -n "$COMPACT_SUMMARY" ]; then
     echo "PostCompact: compact_summary saved for session $SESSION_ID" >&2
 fi
 
+# Compact count tracking for context reset recommendation
+STATS_FILE="$STATE_DIR/compact-stats.json"
+if [ -f "$STATS_FILE" ] && command -v jq &>/dev/null; then
+    tmp=$(mktemp)
+    if jq '.compact_count += 1 | .last_compact_at = (now | todate)' "$STATS_FILE" > "$tmp" 2>/dev/null; then
+        mv "$tmp" "$STATS_FILE"
+    else
+        rm -f "$tmp"
+    fi
+else
+    cat > "$STATS_FILE" << STATS
+{
+  "compact_count": 1,
+  "last_compact_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+STATS
+fi
+echo "PostCompact: compact count updated for session $SESSION_ID" >&2
+
+# compact count が 2 以上なら context reset を推奨
+count=$(jq -r '.compact_count // 0' "$STATS_FILE" 2>/dev/null || echo "0")
+if [ "$count" -ge 2 ]; then
+    echo "⚠ Context reset 推奨: compaction が ${count} 回発生。品質低下の兆候がある場合は claude --continue --fork-session を検討してください。" >&2
+fi
+
 exit 0
