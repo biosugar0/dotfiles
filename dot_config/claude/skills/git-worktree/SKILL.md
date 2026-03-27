@@ -12,6 +12,7 @@ description: |
   - 「git wt」
 
   重要: git worktree コマンドではなく git wt コマンドを使用すること。
+effort: low
 ---
 
 Read ./INSTRUCTIONS.md and follow the instructions.

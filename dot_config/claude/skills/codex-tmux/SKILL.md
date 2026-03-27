@@ -5,6 +5,7 @@ description: >-
   セカンドオピニオンが欲しい場面。
 user-invocable: true
 argument-hint: "[question]"
+effort: high
 ---
 
 Read ./INSTRUCTIONS.md and follow the instructions.

@@ -22,7 +22,7 @@
 ### Skills
 | Skill | 検証方法 | 簡素化の条件 |
 |-------|---------|-------------|
-| verification-before-completion | evaluator導入後、セルフチェックの追加価値を測定 | evaluatorが同等以上のカバレッジを提供 |
+| verify | evaluator導入後、セルフチェックの追加価値を測定 | evaluatorが同等以上のカバレッジを提供 |
 | orchestrator sprint粒度 | Opus 4.6でより粗い粒度でも品質維持できるか | 2-step で十分な場合が多い |
 
 ### Session Continuity
@@ -68,7 +68,7 @@
 
 | コンポーネント | 仮説 | 検証方法 |
 |--------------|------|---------|
-| `verification-before-completion` | evaluator が同等カバレッジを提供する場合、冗長 | evaluator 導入後1ヶ月の品質比較 |
+| `verify` | evaluator が同等カバレッジを提供する場合、冗長 | evaluator 導入後1ヶ月の品質比較 |
 | stop-hook Haiku 呼び出し | Opus 4.6 は停止タイミング判断が改善 | ブロック率の推移を計測 |
 | orchestrator の粒度 | Opus 4.6 ではより粗い粒度で十分 | 2-step vs 4-step の品質比較 |
 
