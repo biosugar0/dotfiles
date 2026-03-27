@@ -45,6 +45,26 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
     done
   fi
 
+  # evaluator gate チェック（codex review 通過後）
+  if [ "$found" = true ]; then
+    gate_file="$hook_cwd/ai/state/workflow-gate.json"
+    if [ -f "$gate_file" ] && command -v jq &>/dev/null; then
+      gate_sha=$(jq -r '.head_sha // ""' "$gate_file")
+      gate_status=$(jq -r '.evaluator.status // ""' "$gate_file")
+      current_sha=$(git -C "$hook_cwd" rev-parse --short HEAD 2>/dev/null)
+
+      if [ "$gate_sha" != "$current_sha" ]; then
+        # head が変わっている（evaluator 後にコミットされた）→ 警告のみ、ブロックしない
+        echo "evaluator: HEAD が変わっています（gate: $gate_sha, current: $current_sha）" >&2
+      elif [ "$gate_status" = "FAIL" ]; then
+        # evaluator FAIL → 警告のみ、ブロックしない（soft recommendation）
+        gate_summary=$(jq -r '.evaluator.summary // ""' "$gate_file")
+        echo "evaluator: FAIL — $gate_summary（修正推奨）" >&2
+      fi
+    fi
+    # workflow-gate.json がなくてもブロックしない（evaluator は soft recommendation）
+  fi
+
   if [ "$found" = false ]; then
     jq -n '{
       hookSpecificOutput: {

@@ -96,6 +96,32 @@
 - **BLOCKED** → 環境起動不可、外部API不達等で評価実行不能。理由を報告し、手動検証を推奨
 - **NOT_EVALUABLE** → 変更が評価基準のスコープ外（ドキュメントのみ、設定変更のみ等）。スキップを報告
 
+## 評価 Receipt の記録
+
+評価完了後、以下のコマンドで receipt を記録する（PR gate が参照する）:
+
+```bash
+mkdir -p ai/state
+cat > ai/state/workflow-gate.json << GATE
+{
+  "branch": "$(git branch --show-current)",
+  "head_sha": "$(git rev-parse --short HEAD)",
+  "evaluator": {
+    "status": "{PASS|FAIL|BLOCKED|NOT_EVALUABLE}",
+    "summary": "{1行の評価サマリー}"
+  },
+  "updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+GATE
+```
+
+- PASS: 全基準が閾値を超えた
+- FAIL: 1つ以上の基準が閾値未達
+- BLOCKED: 環境問題で評価実行不能
+- NOT_EVALUABLE: ドキュメントのみ・設定変更のみ等、評価基準のスコープ外
+
+**receipt は必ず記録する。** FAIL でも BLOCKED でも記録すること。
+
 ## 甘くなるな
 
 以下は FAIL 判定の例:
