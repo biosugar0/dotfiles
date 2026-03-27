@@ -86,6 +86,88 @@ SessionStart hookがこのファイルを自動検出し、未完了機能を注
 - 内容: 詳細な作業記録、決定事項、次のアクション
 - 用途: 重要な引き継ぎが必要な場合
 
+## Context Reset 戦略
+
+### Compaction vs Context Reset
+
+| 手法 | メリット | デメリット | 適用場面 |
+|------|---------|-----------|---------|
+| Compaction (`/compact`) | 自動、連続性維持 | context anxiety残存、要約劣化 | 中規模タスク |
+| Fork Session (`--fork-session`) | クリーンスレート、履歴保持 | セッション権限の再承認が必要 | 大規模タスク |
+
+### Context Reset の実行方法
+
+compaction が2回以上発生した場合、または品質低下の兆候がある場合に検討する。
+
+**品質低下の兆候:**
+- 以前決めた設計方針を忘れている
+- 同じファイルを何度も読み直している
+- 回答が冗長・反復的になっている
+- タスクの完了を急ぎ始めている（context anxiety）
+
+**手順:**
+
+1. **セッション保存**: `/save-session context-reset` で詳細な引き継ぎを保存
+
+2. **ユーザーへの提案** — 以下のいずれかを提案:
+
+**方法A: Fork Session（推奨）**
+```
+Context reset を推奨する。以下を実行してほしい:
+claude --continue --fork-session
+```
+- 既存の会話履歴を保持しつつ新しいコンテキストで再開
+
+**方法B: Branch（UI操作）**
+```
+/branch context-reset
+```
+- 現在のセッションから分岐して新しいパスで作業を継続
+
+**方法C: 新規セッション + 手動読み込み**
+```
+新しいセッションを開始し、/load-session latest で引き継ぎ情報を読み込んでほしい。
+```
+
+### 補助: handoff.json（オプション）
+
+構造化されたハンドオフが必要な場合（特に feature_list.json を使う大規模プロジェクト）、
+`/save-session` に加えて以下のファイルを作成する:
+
+```json
+{
+  "schema_version": 1,
+  "created_at": "ISO timestamp",
+  "task": {
+    "original_prompt": "ユーザーの元のリクエスト",
+    "spec_path": "plan ファイルパス（あれば）",
+    "feature_list_path": "feature_list.json（あれば）"
+  },
+  "progress": {
+    "completed": ["完了した機能/タスクのリスト"],
+    "in_progress": "現在取り組んでいること",
+    "remaining": ["未着手のタスクリスト"],
+    "current_branch": "ブランチ名",
+    "last_commit": "SHA"
+  },
+  "decisions": [
+    {
+      "what": "決定内容",
+      "why": "理由",
+      "alternatives_rejected": ["却下した代替案"]
+    }
+  ],
+  "context": {
+    "key_files": ["重要なファイルパス"],
+    "gotchas": ["注意点、罠、特殊な事情"],
+    "next_steps": ["具体的な次のアクション"]
+  }
+}
+```
+
+SessionStart hook は `ai/state/handoff.json` を自動検出し、存在する場合はコンテキストに注入する。
+SessionEnd hook は軽量な git 状態スナップショットのみ生成する（補助的手段）。
+
 ## 関連コマンド
 
 - `/save-session` - 詳細な引き継ぎ情報を手動保存

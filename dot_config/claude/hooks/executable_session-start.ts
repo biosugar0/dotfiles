@@ -375,6 +375,45 @@ async function handleStartupResume(projectDir: string): Promise<void> {
     // No feature list
   }
 
+  // Context Reset handoff
+  try {
+    const handoffPath = `${projectDir}/ai/state/handoff.json`;
+    const handoffContent = await readTextFileSafe(handoffPath);
+    if (handoffContent) {
+      const handoff = JSON.parse(handoffContent);
+      const created = new Date(handoff.created_at);
+      const now = new Date();
+      // 24時間以内のものだけ注入
+      if (now.getTime() - created.getTime() < 24 * 60 * 60 * 1000) {
+        parts.push("", "## Context Reset Handoff");
+        parts.push(`前セッションからの引き継ぎ:`);
+        if (handoff.progress?.completed?.length > 0) {
+          parts.push(`- 完了: ${handoff.progress.completed.join(", ")}`);
+        }
+        if (handoff.progress?.remaining?.length > 0) {
+          parts.push(`- 残り: ${handoff.progress.remaining.join(", ")}`);
+        }
+        if (handoff.context?.next_steps?.length > 0) {
+          parts.push(
+            `- 次のアクション: ${handoff.context.next_steps.join(", ")}`,
+          );
+        }
+        if (handoff.decisions?.length > 0) {
+          parts.push(
+            `- 重要な決定: ${handoff.decisions.map((d: { what: string }) => d.what).join("; ")}`,
+          );
+        }
+        if (handoff.context?.gotchas?.length > 0) {
+          parts.push(
+            `- 注意点: ${handoff.context.gotchas.join("; ")}`,
+          );
+        }
+      }
+    }
+  } catch {
+    // handoff.json がなければスキップ
+  }
+
   outputHookResult(parts.join("\n"));
 }
 
