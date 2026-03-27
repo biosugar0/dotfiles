@@ -34,6 +34,20 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
     fi
   fi
 
+  # --repo フラグからリポジトリ名を抽出してマーカー検索
+  # worktree 環境では hook_cwd が別リポジトリを指すため、コマンド内の --repo が信頼できる
+  if [ "$found" = false ]; then
+    cli_repo=$(echo "$command" | grep -oE -- '--repo[= ]+[^ ]+' | sed 's/--repo[= ]*//' | sed 's|.*/||')
+    if [ -n "$cli_repo" ]; then
+      for marker in /tmp/.codex-review-done--"${cli_repo}"--*; do
+        if [ -f "$marker" ]; then
+          found=true
+          break
+        fi
+      done
+    fi
+  fi
+
   # repo名 glob フォールバック（変数経由cd等でパス抽出不可の場合）
   if [ "$found" = false ]; then
     repo=$(git -C "$hook_cwd" remote get-url origin 2>/dev/null | sed 's/\.git$//;s|.*/||')
