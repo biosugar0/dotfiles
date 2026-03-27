@@ -274,7 +274,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat ~/.config/claude/hooks/golden-rules.txt 2>/dev/null || true; echo ''; (git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --is-inside-work-tree >/dev/null 2>&1 && git -C \"$CLAUDE_PROJECT_DIR\" status --short) || true; echo '\n---\nCurrent time: '$(date '+%Y-%m-%d %H:%M:%S')",
+            "command": "cat ~/.config/claude/hooks/data/golden-rules.txt 2>/dev/null || true; echo ''; (git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --is-inside-work-tree >/dev/null 2>&1 && git -C \"$CLAUDE_PROJECT_DIR\" status --short) || true; echo '\n---\nCurrent time: '$(date '+%Y-%m-%d %H:%M:%S')",
             "timeout": 5
           }
         ]
@@ -283,7 +283,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat ~/.config/claude/hooks/workflow-instructions.md | jq -Rs '{hookSpecificOutput:{hookEventName:\"UserPromptSubmit\",additionalContext:.}}'",
+            "command": "cat ~/.config/claude/hooks/data/workflow-instructions.md | jq -Rs '{hookSpecificOutput:{hookEventName:\"UserPromptSubmit\",additionalContext:.}}'",
             "timeout": 5
           }
         ]
