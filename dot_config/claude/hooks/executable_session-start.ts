@@ -112,6 +112,51 @@ async function getGitShortHead(projectDir: string): Promise<string> {
   }
 }
 
+async function buildResumeContext(projectDir: string, sessionId: string): Promise<string> {
+  try {
+    const resumePath = `${projectDir}/ai/state/${sessionId}/compact_resume.json`;
+    const content = await readTextFileSafe(resumePath);
+    if (!content) return "";
+    const resume = JSON.parse(content);
+
+    const parts: string[] = ["", "## Compact Resume"];
+
+    if (resume.resume) {
+      // Haiku structured output
+      const r = resume.resume;
+      if (r.objective) parts.push(`目的: ${r.objective}`);
+      if (r.current_subtask) parts.push(`現在のサブタスク: ${r.current_subtask}`);
+      if (r.done_criteria?.length > 0) {
+        parts.push("Done 条件:");
+        for (const c of r.done_criteria.slice(0, 5)) parts.push(`- ${c}`);
+      }
+      if (r.decisions?.length > 0) {
+        parts.push("決定事項:");
+        for (const d of r.decisions.slice(0, 3)) parts.push(`- ${d.what}（理由: ${d.why}）`);
+      }
+      if (r.open_loops?.length > 0) {
+        parts.push("未完了:");
+        for (const l of r.open_loops.slice(0, 3)) parts.push(`- ${l}`);
+      }
+      if (r.next_actions?.length > 0) {
+        parts.push("次のアクション:");
+        for (const a of r.next_actions.slice(0, 3)) parts.push(`- ${a}`);
+      }
+    } else if (resume.resume_text) {
+      // Haiku text fallback
+      parts.push(resume.resume_text.slice(0, 1000));
+    } else if (resume.compact_summary_excerpt) {
+      // Mechanical extraction
+      parts.push("(compact summary excerpt)");
+      parts.push(JSON.parse(resume.compact_summary_excerpt).slice(0, 500));
+    }
+
+    return parts.join("\n");
+  } catch {
+    return "";
+  }
+}
+
 const FINDINGS_TTL_HOURS = 12;
 
 async function buildFindingsContext(projectDir: string, sessionId?: string): Promise<string> {
@@ -313,8 +358,9 @@ async function handleCompact(
       const supplement = toolBlock.input as CompactSupplementInput;
       const formatted = formatSupplement(supplement);
       const findingsCtx = await buildFindingsContext(projectDir, sessionId);
-      if (formatted.trim() || findingsCtx) {
-        outputHookResult(formatted + findingsCtx);
+      const resumeCtx = await buildResumeContext(projectDir, sessionId);
+      if (formatted.trim() || findingsCtx || resumeCtx) {
+        outputHookResult(formatted + findingsCtx + resumeCtx);
       }
     } else {
       await Deno.stderr.write(
@@ -322,9 +368,10 @@ async function handleCompact(
           `SessionStart(compact): No tool_use block in response. stop_reason=${response.stop_reason}\n`,
         ),
       );
-      // Supplement がなくても findings は注入
+      // Supplement がなくても findings と resume は注入
       const findingsCtx = await buildFindingsContext(projectDir, sessionId);
-      if (findingsCtx) outputHookResult(findingsCtx);
+      const resumeCtx = await buildResumeContext(projectDir, sessionId);
+      if (findingsCtx || resumeCtx) outputHookResult(findingsCtx + resumeCtx);
     }
   } catch (e) {
     const errName = e instanceof Error ? e.constructor.name : "Unknown";
@@ -335,7 +382,8 @@ async function handleCompact(
       ),
     );
     const findingsCtx = await buildFindingsContext(projectDir, sessionId);
-    outputHookResult(buildFallbackMarkdown(assets) + findingsCtx);
+    const resumeCtx = await buildResumeContext(projectDir, sessionId);
+    outputHookResult(buildFallbackMarkdown(assets) + findingsCtx + resumeCtx);
   }
 }
 

@@ -439,6 +439,25 @@ async function main() {
       `${fiveColor}⏱ 5h${RESET} ${fiveBar}${sep}${sevenColor}📅 7d${RESET} ${sevenBar}${resetStr ? `  ${GRAY}Resets ${resetStr}${RESET}` : ""}`,
     );
   }
+
+  // Write session health for Stop/PostCompact hooks to consume
+  if (input.session_id) {
+    try {
+      const healthDir = "/tmp/claude-session-health";
+      await Deno.mkdir(healthDir, { recursive: true });
+      const healthFile = `${healthDir}/${input.session_id}.json`;
+      const health = {
+        session_id: input.session_id,
+        context_pct: pct,
+        exceeds_200k: exceeds200k,
+        duration_ms: duration,
+        updated_at: new Date().toISOString(),
+      };
+      await Deno.writeTextFile(healthFile, JSON.stringify(health));
+    } catch {
+      // ignore — statusline should never fail
+    }
+  }
 }
 
 if (import.meta.main) {
