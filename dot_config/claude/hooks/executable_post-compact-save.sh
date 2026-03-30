@@ -45,4 +45,15 @@ if [ "$count" -ge 2 ]; then
     echo "⚠ Context reset 推奨: compaction が ${count} 回発生。品質低下の兆候がある場合は claude --continue --fork-session を検討してください。" >&2
 fi
 
+# Evaluator findings checkpoint (compact 後も findings を保持)
+GATE_FILE="$CLAUDE_PROJECT_DIR/ai/state/workflow-gate.json"
+CHECKPOINT_FILE="$STATE_DIR/findings-checkpoint.json"
+if [ -f "$GATE_FILE" ] && command -v jq &>/dev/null; then
+    active=$(jq -r '.evaluator.active_findings // [] | length' "$GATE_FILE" 2>/dev/null || echo "0")
+    if [ "$active" -gt 0 ]; then
+        cp "$GATE_FILE" "$CHECKPOINT_FILE"
+        echo "PostCompact: findings checkpoint saved ($active active findings)" >&2
+    fi
+fi
+
 exit 0

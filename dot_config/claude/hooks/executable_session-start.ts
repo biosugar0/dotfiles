@@ -114,10 +114,15 @@ async function getGitShortHead(projectDir: string): Promise<string> {
 
 const FINDINGS_TTL_HOURS = 12;
 
-async function buildFindingsContext(projectDir: string): Promise<string> {
+async function buildFindingsContext(projectDir: string, sessionId?: string): Promise<string> {
   try {
-    const gatePath = `${projectDir}/ai/state/workflow-gate.json`;
-    const gateContent = await readTextFileSafe(gatePath);
+    // Primary: workflow-gate.json, Fallback: findings-checkpoint.json
+    let gateContent = await readTextFileSafe(`${projectDir}/ai/state/workflow-gate.json`);
+    if (!gateContent && sessionId) {
+      gateContent = await readTextFileSafe(
+        `${projectDir}/ai/state/${sessionId}/findings-checkpoint.json`,
+      );
+    }
     if (!gateContent) return "";
     const gate = JSON.parse(gateContent);
     const activeFindings = gate.evaluator?.active_findings;
@@ -307,7 +312,7 @@ async function handleCompact(
     if (toolBlock && toolBlock.type === "tool_use") {
       const supplement = toolBlock.input as CompactSupplementInput;
       const formatted = formatSupplement(supplement);
-      const findingsCtx = await buildFindingsContext(projectDir);
+      const findingsCtx = await buildFindingsContext(projectDir, sessionId);
       if (formatted.trim() || findingsCtx) {
         outputHookResult(formatted + findingsCtx);
       }
@@ -318,7 +323,7 @@ async function handleCompact(
         ),
       );
       // Supplement がなくても findings は注入
-      const findingsCtx = await buildFindingsContext(projectDir);
+      const findingsCtx = await buildFindingsContext(projectDir, sessionId);
       if (findingsCtx) outputHookResult(findingsCtx);
     }
   } catch (e) {
@@ -329,7 +334,7 @@ async function handleCompact(
         `SessionStart(compact) Haiku error [${errName}]: ${errMsg}\n`,
       ),
     );
-    const findingsCtx = await buildFindingsContext(projectDir);
+    const findingsCtx = await buildFindingsContext(projectDir, sessionId);
     outputHookResult(buildFallbackMarkdown(assets) + findingsCtx);
   }
 }
