@@ -183,12 +183,19 @@ async function buildFindingsContext(projectDir: string, sessionId?: string): Pro
 
     const lines: string[] = [
       "",
-      "## Evaluator Findings (未解決)",
-      `Status: ${gate.evaluator.status} — ${gate.evaluator.summary}`,
+      "## 要検証チェックリスト (evaluator findings)",
+      `前回評価: ${gate.evaluator.status} — ${gate.evaluator.summary}`,
+      "",
+      "以下を修正・検証してから完了すること:",
     ];
-    for (const f of activeFindings.slice(0, 5)) {
-      const persist = f.persist_count > 1 ? ` (persist x${f.persist_count})` : "";
-      lines.push(`- [${f.key}][${f.status}${persist}] ${f.path}:${f.line} ${f.summary}`);
+    // PERSIST を優先表示（スタック検知対象）
+    const sorted = [...activeFindings].sort(
+      (a: { persist_count: number }, b: { persist_count: number }) =>
+        (b.persist_count ?? 1) - (a.persist_count ?? 1),
+    );
+    for (const f of sorted.slice(0, 5)) {
+      const persist = f.persist_count > 1 ? ` ⚠ persist x${f.persist_count}` : "";
+      lines.push(`- [ ] [${f.key}] ${f.path}:${f.line} — ${f.summary}${persist}`);
     }
     if (activeFindings.length > 5) {
       lines.push(`- ... 他 ${activeFindings.length - 5} 件`);
@@ -482,6 +489,31 @@ async function handleStartupResume(projectDir: string): Promise<void> {
     }
   } catch {
     // No feature list
+  }
+
+  // Task contract (scope drift prevention)
+  try {
+    const contractPath = `${projectDir}/ai/state/task_contract.json`;
+    const contractContent = await readTextFileSafe(contractPath);
+    if (contractContent) {
+      const contract = JSON.parse(contractContent);
+      if (contract.objective) {
+        parts.push("", "## Task Contract (スコープ確認)");
+        parts.push(`目的: ${contract.objective}`);
+        if (contract.current_step) parts.push(`現在: ${contract.current_step}`);
+        if (contract.done_criteria?.length > 0) {
+          parts.push("Done 条件:");
+          for (const c of contract.done_criteria.slice(0, 5)) {
+            parts.push(`- [ ] ${c}`);
+          }
+        }
+        if (contract.out_of_scope?.length > 0) {
+          parts.push(`スコープ外: ${contract.out_of_scope.join(", ")}`);
+        }
+      }
+    }
+  } catch {
+    // No task contract
   }
 
   // Evaluator findings (persist across compaction)
