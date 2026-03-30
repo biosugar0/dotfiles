@@ -72,26 +72,44 @@
 
 ### 総合判定: FAIL (1基準が閾値未達)
 
-### 具体的な問題
-1. [FAIL] エラーハンドリング
+### 具体的な問題（Finding ID 付き）
+
+各問題に一意の finding_id を付与する。形式: `EVAL-{status}-{file}-L{line}`
+
+1. [EVAL-NEW-users-ts-L42] エラーハンドリング (FAIL)
    - `/api/users/999` が 500 を返す（期待: 404）
    - ファイル: src/routes/users.ts:42
    - 原因: findById の null チェック欠落
 
-2. [WARNING] パフォーマンス
+2. [EVAL-NEW-users-ts-L15] パフォーマンス (WARNING)
    - `/api/users` で全件取得後にフィルタリング
    - 改善案: WHERE 句でフィルタリング
 
+### 再評価時の追跡
+
+再評価（2回目以降）では、前回の finding_id を追跡する:
+
+- **EVAL-RESOLVED-xxx**: 前回の指摘が修正された
+- **EVAL-PERSIST-xxx**: 前回の指摘が未修正のまま残っている
+- **EVAL-NEW-xxx**: 今回新たに発見された問題
+
+例:
+- [EVAL-RESOLVED-users-ts-L42] null チェック追加を確認 → 修正済み
+- [EVAL-PERSIST-users-ts-L15] パフォーマンス → 未修正
+- [EVAL-NEW-auth-ts-L88] トークン検証の例外処理欠落
+
 ### 次のアクション
-- [ ] users.ts:42 に null チェック追加
-- [ ] users クエリにページネーション追加（推奨）
+- [ ] 全 PERSIST finding を修正
+- [ ] 全 NEW finding を修正（WARNING は推奨）
 ```
 
 ### 5. フィードバックループ
 
-- FAIL 判定 → Generator に具体的フィードバックを返す
+- FAIL 判定 → Generator に finding_id 付きフィードバックを返す
 - Generator が修正 → 再評価（最大3回）
+  - 再評価時は前回の finding_id を追跡し、RESOLVED/PERSIST/NEW を明示
 - 3回 FAIL → ユーザーにエスカレーション
+- **スタック検知**: 同じ finding_id が 2回連続 PERSIST → その finding は Generator が自力で解決できない可能性が高い。ユーザーにエスカレーションするか、別のアプローチを提案
 - PASS → 完了報告
 - **BLOCKED** → 環境起動不可、外部API不達等で評価実行不能。理由を報告し、手動検証を推奨
 - **NOT_EVALUABLE** → 変更が評価基準のスコープ外（ドキュメントのみ、設定変更のみ等）。スキップを報告
@@ -108,7 +126,12 @@ cat > ai/state/workflow-gate.json << GATE
   "head_sha": "$(git rev-parse --short HEAD)",
   "evaluator": {
     "status": "{PASS|FAIL|BLOCKED|NOT_EVALUABLE}",
-    "summary": "{1行の評価サマリー}"
+    "summary": "{1行の評価サマリー}",
+    "findings": {
+      "new": 0,
+      "persist": 0,
+      "resolved": 0
+    }
   },
   "updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }

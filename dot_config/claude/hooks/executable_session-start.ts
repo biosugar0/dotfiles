@@ -375,6 +375,26 @@ async function handleStartupResume(projectDir: string): Promise<void> {
     // No feature list
   }
 
+  // Evaluator findings (persist across compaction)
+  try {
+    const gatePath = `${projectDir}/ai/state/workflow-gate.json`;
+    const gateContent = await readTextFileSafe(gatePath);
+    if (gateContent) {
+      const gate = JSON.parse(gateContent);
+      const findings = gate.evaluator?.findings;
+      if (findings && (findings.new > 0 || findings.persist > 0)) {
+        parts.push(
+          "",
+          "## Evaluator Findings (前回)",
+          `Status: ${gate.evaluator.status} — ${gate.evaluator.summary}`,
+          `NEW: ${findings.new}, PERSIST: ${findings.persist}, RESOLVED: ${findings.resolved}`,
+        );
+      }
+    }
+  } catch {
+    // No workflow-gate.json
+  }
+
   // Context Reset handoff
   try {
     const handoffPath = `${projectDir}/ai/state/handoff.json`;
