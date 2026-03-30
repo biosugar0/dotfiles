@@ -112,6 +112,8 @@ async function getGitShortHead(projectDir: string): Promise<string> {
   }
 }
 
+const FINDINGS_TTL_HOURS = 12;
+
 async function buildFindingsContext(projectDir: string): Promise<string> {
   try {
     const gatePath = `${projectDir}/ai/state/workflow-gate.json`;
@@ -120,6 +122,14 @@ async function buildFindingsContext(projectDir: string): Promise<string> {
     const gate = JSON.parse(gateContent);
     const activeFindings = gate.evaluator?.active_findings;
     if (!activeFindings || activeFindings.length === 0) return "";
+
+    // TTL チェック: updated_at が 12 時間以内かどうか
+    if (gate.updated_at) {
+      const updatedAt = new Date(gate.updated_at).getTime();
+      if (isNaN(updatedAt) || Date.now() - updatedAt > FINDINGS_TTL_HOURS * 3600_000) {
+        return ""; // stale findings — skip injection
+      }
+    }
 
     const lines: string[] = [
       "",
