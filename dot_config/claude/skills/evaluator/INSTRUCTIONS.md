@@ -72,26 +72,52 @@
 
 ### 総合判定: FAIL (1基準が閾値未達)
 
-### 具体的な問題
-1. [FAIL] エラーハンドリング
+### 具体的な問題（Finding 追跡付き）
+
+各問題に安定した finding key を付与する。key は `EVAL-{category}-{N}` 形式（永続、status や行番号に依存しない）。
+category: `ERR`, `PERF`, `TEST`, `SEC`, `UX`, `SPEC`
+
+初回評価の例:
+1. **[EVAL-ERR-1]** エラーハンドリング (FAIL)
+   - status: NEW
+   - path: src/routes/users.ts:42
    - `/api/users/999` が 500 を返す（期待: 404）
-   - ファイル: src/routes/users.ts:42
    - 原因: findById の null チェック欠落
 
-2. [WARNING] パフォーマンス
+2. **[EVAL-PERF-1]** パフォーマンス (WARNING)
+   - status: NEW
+   - path: src/routes/users.ts:15
    - `/api/users` で全件取得後にフィルタリング
-   - 改善案: WHERE 句でフィルタリング
+
+### 再評価時の Finding 追跡
+
+再評価（2回目以降）では、まず `ai/state/workflow-gate.json` を読み、前回の `active_findings` と今回の findings を照合する。
+同じ問題には前回と同じ key を再利用し、status を更新する:
+
+- **NEW**: 今回新たに発見された問題（新しい key を採番）
+- **PERSIST**: 前回の指摘が未修正（同じ key、persist_count +1）
+- **RESOLVED**: 前回の指摘が修正された（レポートに記録、active_findings からは除外）
+
+照合基準: 同じ category + 同じファイル + 類似の症状 → 同一 finding。
+summary は事実ベースで安定した表現を使い、前回と同じ finding には前回の wording を再利用する。
+
+再評価の例:
+- **[EVAL-ERR-1]** status: RESOLVED — null チェック追加を確認
+- **[EVAL-PERF-1]** status: PERSIST (persist_count: 2) — 未修正
+- **[EVAL-SEC-1]** status: NEW — トークン検証の例外処理欠落
 
 ### 次のアクション
-- [ ] users.ts:42 に null チェック追加
-- [ ] users クエリにページネーション追加（推奨）
+- [ ] 全 PERSIST finding を修正（persist_count 2以上は優先）
+- [ ] 全 NEW finding を修正（WARNING は推奨）
 ```
 
 ### 5. フィードバックループ
 
-- FAIL 判定 → Generator に具体的フィードバックを返す
+- FAIL 判定 → Generator に finding_id 付きフィードバックを返す
 - Generator が修正 → 再評価（最大3回）
+  - 再評価時は前回の finding_id を追跡し、RESOLVED/PERSIST/NEW を明示
 - 3回 FAIL → ユーザーにエスカレーション
+- **スタック検知**: 同じ finding_id が 2回連続 PERSIST → その finding は Generator が自力で解決できない可能性が高い。ユーザーにエスカレーションするか、別のアプローチを提案
 - PASS → 完了報告
 - **BLOCKED** → 環境起動不可、外部API不達等で評価実行不能。理由を報告し、手動検証を推奨
 - **NOT_EVALUABLE** → 変更が評価基準のスコープ外（ドキュメントのみ、設定変更のみ等）。スキップを報告
@@ -102,23 +128,36 @@
 
 ```bash
 mkdir -p ai/state
-cat > ai/state/workflow-gate.json << GATE
+cat > ai/state/workflow-gate.json << 'GATE'
 {
-  "branch": "$(git branch --show-current)",
-  "head_sha": "$(git rev-parse --short HEAD)",
+  "schema_version": 2,
+  "branch": "{current branch}",
+  "head_sha": "{short HEAD}",
   "evaluator": {
     "status": "{PASS|FAIL|BLOCKED|NOT_EVALUABLE}",
-    "summary": "{1行の評価サマリー}"
+    "summary": "{1行の評価サマリー}",
+    "findings_count": { "new": 0, "persist": 0, "resolved": 0 },
+    "active_findings": [
+      {
+        "key": "EVAL-ERR-1",
+        "category": "ERR",
+        "status": "PERSIST",
+        "summary": "users by id returns 500 instead of 404",
+        "path": "src/routes/users.ts",
+        "line": 42,
+        "persist_count": 2
+      }
+    ]
   },
-  "updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  "updated_at": "{ISO timestamp}"
 }
 GATE
 ```
 
-- PASS: 全基準が閾値を超えた
-- FAIL: 1つ以上の基準が閾値未達
-- BLOCKED: 環境問題で評価実行不能
-- NOT_EVALUABLE: ドキュメントのみ・設定変更のみ等、評価基準のスコープ外
+- `branch`, `head_sha`, `updated_at` は実際の値を埋める
+- `active_findings` には **未解決の finding のみ** を含める（RESOLVED は除外）
+- `persist_count` は前回の値 +1（NEW なら 1）
+- PASS 時は `active_findings: []`
 
 **receipt は必ず記録する。** FAIL でも BLOCKED でも記録すること。
 

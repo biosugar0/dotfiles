@@ -98,6 +98,62 @@ Rules:
 
 Call compact_supplement with your analysis.`;
 
+async function getGitShortHead(projectDir: string): Promise<string> {
+  try {
+    const { stdout } = await new Deno.Command("git", {
+      args: ["rev-parse", "--short", "HEAD"],
+      stdout: "piped",
+      stderr: "null",
+      cwd: projectDir,
+    }).output();
+    return new TextDecoder().decode(stdout).trim();
+  } catch {
+    return "";
+  }
+}
+
+const FINDINGS_TTL_HOURS = 12;
+
+async function buildFindingsContext(projectDir: string, sessionId?: string): Promise<string> {
+  try {
+    // Primary: workflow-gate.json, Fallback: findings-checkpoint.json
+    let gateContent = await readTextFileSafe(`${projectDir}/ai/state/workflow-gate.json`);
+    if (!gateContent && sessionId) {
+      gateContent = await readTextFileSafe(
+        `${projectDir}/ai/state/${sessionId}/findings-checkpoint.json`,
+      );
+    }
+    if (!gateContent) return "";
+    const gate = JSON.parse(gateContent);
+    const activeFindings = gate.evaluator?.active_findings;
+    if (!activeFindings || activeFindings.length === 0) return "";
+
+    // TTL チェック: updated_at が 12 時間以内かどうか
+    if (gate.updated_at) {
+      const updatedAt = new Date(gate.updated_at).getTime();
+      if (isNaN(updatedAt) || Date.now() - updatedAt > FINDINGS_TTL_HOURS * 3600_000) {
+        return ""; // stale findings — skip injection
+      }
+    }
+
+    const lines: string[] = [
+      "",
+      "## Evaluator Findings (未解決)",
+      `Status: ${gate.evaluator.status} — ${gate.evaluator.summary}`,
+    ];
+    for (const f of activeFindings.slice(0, 5)) {
+      const persist = f.persist_count > 1 ? ` (persist x${f.persist_count})` : "";
+      lines.push(`- [${f.key}][${f.status}${persist}] ${f.path}:${f.line} ${f.summary}`);
+    }
+    if (activeFindings.length > 5) {
+      lines.push(`- ... 他 ${activeFindings.length - 5} 件`);
+    }
+    return lines.join("\n");
+  } catch {
+    return "";
+  }
+}
+
 function outputHookResult(context: string): void {
   const result = {
     hookSpecificOutput: {
@@ -256,8 +312,9 @@ async function handleCompact(
     if (toolBlock && toolBlock.type === "tool_use") {
       const supplement = toolBlock.input as CompactSupplementInput;
       const formatted = formatSupplement(supplement);
-      if (formatted.trim()) {
-        outputHookResult(formatted);
+      const findingsCtx = await buildFindingsContext(projectDir, sessionId);
+      if (formatted.trim() || findingsCtx) {
+        outputHookResult(formatted + findingsCtx);
       }
     } else {
       await Deno.stderr.write(
@@ -265,6 +322,9 @@ async function handleCompact(
           `SessionStart(compact): No tool_use block in response. stop_reason=${response.stop_reason}\n`,
         ),
       );
+      // Supplement がなくても findings は注入
+      const findingsCtx = await buildFindingsContext(projectDir, sessionId);
+      if (findingsCtx) outputHookResult(findingsCtx);
     }
   } catch (e) {
     const errName = e instanceof Error ? e.constructor.name : "Unknown";
@@ -274,7 +334,8 @@ async function handleCompact(
         `SessionStart(compact) Haiku error [${errName}]: ${errMsg}\n`,
       ),
     );
-    outputHookResult(buildFallbackMarkdown(assets));
+    const findingsCtx = await buildFindingsContext(projectDir, sessionId);
+    outputHookResult(buildFallbackMarkdown(assets) + findingsCtx);
   }
 }
 
@@ -373,6 +434,34 @@ async function handleStartupResume(projectDir: string): Promise<void> {
     }
   } catch {
     // No feature list
+  }
+
+  // Evaluator findings (persist across compaction)
+  try {
+    const gatePath = `${projectDir}/ai/state/workflow-gate.json`;
+    const gateContent = await readTextFileSafe(gatePath);
+    if (gateContent) {
+      const gate = JSON.parse(gateContent);
+      const activeFindings = gate.evaluator?.active_findings;
+      if (activeFindings && activeFindings.length > 0) {
+        // HEAD 一致チェック
+        const currentSha = await getGitShortHead(projectDir);
+
+        if (gate.head_sha === currentSha) {
+          // HEAD 一致: active findings を詳細注入
+          const findingsCtx = await buildFindingsContext(projectDir);
+          if (findingsCtx) parts.push(findingsCtx);
+        } else {
+          // HEAD 不一致: stale notice のみ
+          parts.push(
+            "",
+            `前回評価 (${gate.head_sha}) は現在の HEAD (${currentSha}) と異なります。再評価推奨。`,
+          );
+        }
+      }
+    }
+  } catch {
+    // No workflow-gate.json
   }
 
   // Context Reset handoff
