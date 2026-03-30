@@ -54,6 +54,7 @@ Rules:
 - If "Verification evidence: NONE" or "STALE" and Claude claims completion of code changes, suggest running verification but do not hard-block (docs-only or config-only changes may not need verification)
 - If "Verification evidence: FAIL", BLOCK (continue) — verification failed, must fix before completing
 - If "Verification evidence: PASS", factor it positively into stop decision
+- If "Context health: HIGH USAGE" and work is incomplete, suggest --fork-session in the reason
 - Default: approve stop
 
 Call stop_decision with your judgment.`;
@@ -214,6 +215,29 @@ async function main(): Promise<void> {
       verificationNote = "\n\nVerification evidence: NONE (no verification.json found)";
     }
 
+    // Session health check (context anxiety detection)
+    let healthNote = "";
+    try {
+      const sessionHealthDir = "/tmp/claude-session-health";
+      let healthFile = "";
+      for await (const entry of Deno.readDir(sessionHealthDir)) {
+        if (entry.isFile && entry.name.endsWith(".json")) {
+          healthFile = `${sessionHealthDir}/${entry.name}`;
+        }
+      }
+      if (healthFile) {
+        const healthContent = await Deno.readTextFile(healthFile);
+        const health = JSON.parse(healthContent);
+        if (health.context_pct >= 85) {
+          healthNote = `\n\nContext health: HIGH USAGE (${health.context_pct}%) — consider recommending --fork-session if work is incomplete`;
+        } else if (health.context_pct >= 70) {
+          healthNote = `\n\nContext health: ELEVATED (${health.context_pct}%)`;
+        }
+      }
+    } catch {
+      // No health data available
+    }
+
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 256,
@@ -223,7 +247,7 @@ async function main(): Promise<void> {
       messages: [
         {
           role: "user",
-          content: `${userContext}Claude's last assistant message:\n\n${lastMessage}${verificationNote}`,
+          content: `${userContext}Claude's last assistant message:\n\n${lastMessage}${verificationNote}${healthNote}`,
         },
       ],
     });

@@ -35,6 +35,33 @@
 - 前ステップからどのコンテキストが必要か定義
 - 各サブタスクの粒度を判定（→ Step 3）
 
+**task_contract の生成:**
+
+計画が確定したら、`ai/state/task_contract.json` を生成する:
+
+```bash
+mkdir -p ai/state
+cat > ai/state/task_contract.json << 'CONTRACT'
+{
+  "objective": "{タスク全体の目的（1行）}",
+  "current_step": "{現在取り組んでいるステップ}",
+  "done_criteria": [
+    "{完了条件1}",
+    "{完了条件2}"
+  ],
+  "out_of_scope": [
+    "{スコープ外1}"
+  ],
+  "allowed_files": ["{主要な変更対象ファイル}"],
+  "next_checkpoint": "{次の検証ポイント}",
+  "created_at": "{ISO timestamp}"
+}
+CONTRACT
+```
+
+task_contract は compact 後のスコープドリフト防止に使われる。SessionStart が自動で再注入する。
+各ステップ完了後に current_step を更新すること。
+
 ### 2.5 Sprint Contract（完了条件の定義）
 
 曖昧で壊れやすいステップに限り、実行前に完了条件を明示的に定義する。
