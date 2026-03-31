@@ -35,28 +35,20 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
   fi
 
   # --repo フラグからリポジトリ名を抽出してマーカー検索
-  # worktree 環境では hook_cwd が別リポジトリを指すため、コマンド内の --repo が信頼できる
+  # worktree 環境では hook_cwd が別リポジトリを指すため、コマンド内の --repo + --head で検証
   if [ "$found" = false ]; then
     cli_repo=$(echo "$command" | grep -oE -- '--repo[= ]+[^ ]+' | sed 's/--repo[= ]*//' | sed 's|.*/||')
-    if [ -n "$cli_repo" ]; then
-      for marker in /tmp/.codex-review-done--"${cli_repo}"--*; do
+    cli_head=$(echo "$command" | grep -oE -- '--head[= ]+[^ ]+' | sed 's/--head[= ]*//')
+    if [ -n "$cli_repo" ] && [ -n "$cli_head" ]; then
+      # repo + branch で厳密マッチ（hash のみワイルドカード）
+      for marker in /tmp/.codex-review-done--"${cli_repo}"--"${cli_head}"--*; do
         if [ -f "$marker" ]; then
           found=true
           break
         fi
       done
     fi
-  fi
-
-  # repo名 glob フォールバック（変数経由cd等でパス抽出不可の場合）
-  if [ "$found" = false ]; then
-    repo=$(git -C "$hook_cwd" remote get-url origin 2>/dev/null | sed 's/\.git$//;s|.*/||')
-    for marker in /tmp/.codex-review-done--"${repo}"--*; do
-      if [ -f "$marker" ]; then
-        found=true
-        break
-      fi
-    done
+    # --head なし & --repo のみ → deny（安全側に倒す）
   fi
 
   # evaluator gate チェック（codex review 通過後）
@@ -85,11 +77,19 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
   fi
 
   if [ "$found" = false ]; then
-    jq -n '{
+    # --repo あり & --head なしの場合、--head 付与を促すメッセージ
+    cli_repo_check=$(echo "$command" | grep -oE -- '--repo[= ]+[^ ]+' | head -1)
+    cli_head_check=$(echo "$command" | grep -oE -- '--head[= ]+[^ ]+' | head -1)
+    if [ -n "$cli_repo_check" ] && [ -z "$cli_head_check" ]; then
+      reason="Codex reviewが未実施、または --head フラグが不足。--head {branch} を付けて再試行すること。"
+    else
+      reason="Codex reviewが未実施。先にcodex-tmux skillでレビューを受けてからPRを作成すること。"
+    fi
+    jq -n --arg reason "$reason" '{
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
-        permissionDecisionReason: "Codex reviewが未実施。先にcodex-tmux skillでレビューを受けてからPRを作成すること。"
+        permissionDecisionReason: $reason
       }
     }'
   fi
