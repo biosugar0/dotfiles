@@ -17,9 +17,9 @@ alias awk='gawk'
 alias killclaude='pkill -f -i claude'
 claude() {
   if [ $# -eq 0 ]; then
-    cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config $XDG_CONFIG_HOME/claude/mcp.json "/tasks pick"
+    cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config=$XDG_CONFIG_HOME/claude/mcp.json pick-task
   else
-    cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config $XDG_CONFIG_HOME/claude/mcp.json "$@"
+    cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config=$XDG_CONFIG_HOME/claude/mcp.json "$@"
   fi
 }
 alias codex='cage -preset claude-code -- env GIT_EDITOR=true codex --dangerously-bypass-approvals-and-sandbox'
@@ -191,7 +191,7 @@ gwa() {
     --with-nth=2 \
     --preview 'git -C {1} log --oneline -10' \
     --preview-window=right:50%)
-  [[ -n "$selected" ]] && path=$(echo "$selected" | cut -f1) && (cd "$path" && cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config $XDG_CONFIG_HOME/claude/mcp.json "$@")
+  [[ -n "$selected" ]] && path=$(echo "$selected" | cut -f1) && (cd "$path" && cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config=$XDG_CONFIG_HOME/claude/mcp.json "$@")
 }
 gwe() {
   local selected path
