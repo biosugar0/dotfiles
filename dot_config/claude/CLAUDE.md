@@ -6,7 +6,6 @@
 ## ツール使い分け
 
 - **探索・参照検索**: Claude Code LSP（軽量、トークン効率良い）
-- **シンボルベース編集・リファクタリング**: Serena MCP
 - **Fetch**: fetch MCP または readability MCP
 
 ## 作業方針

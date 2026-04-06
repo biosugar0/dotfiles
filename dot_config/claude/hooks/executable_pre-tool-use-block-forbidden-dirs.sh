@@ -1,6 +1,6 @@
 #!/bin/bash
 # PreToolUse hook: Block staging/committing forbidden directories
-# 禁止ディレクトリ: ai/, .serena/
+# 禁止ディレクトリ: ai/
 
 input=$(cat)
 
@@ -11,12 +11,12 @@ command=$(echo "$input" | jq -r '.tool_input.command // empty')
 echo "$command" | grep -qE '^git (add|commit)' || exit 0
 
 # 明示的な禁止パスを検出
-if echo "$command" | grep -qE '(^|\s)(ai/|\.serena/)'; then
+if echo "$command" | grep -qE '(^|\s)(ai/)'; then
   jq -n '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason: "禁止ディレクトリ(ai/, .serena/)はステージ・コミットできない。"
+      permissionDecisionReason: "禁止ディレクトリ(ai/)はステージ・コミットできない。"
     }
   }'
   exit 0

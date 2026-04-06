@@ -4,18 +4,6 @@
       "command": "npx",
       "args": ["-y", "fetch-mcp"]
     },
-    "serena": {
-      "type": "stdio",
-      "command": "/opt/homebrew/bin/uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/oraios/serena",
-        "serena-mcp-server",
-        "--context",
-        "ide-assistant"
-      ],
-      "env": {}
-    },
     "readability": {
       "type": "stdio",
       "command": "npx",

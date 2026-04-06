@@ -1,9 +1,9 @@
 #!/bin/bash
 {{- if eq .chezmoi.os "darwin" }}
-# pup version: v0.31.1
+# pup version: v0.45.1
 set -euo pipefail
 
-PUP_VERSION="0.31.1"
+PUP_VERSION="0.45.1"
 INSTALL_DIR="${HOME}/.local/bin"
 
 {{- if eq .chezmoi.arch "arm64" }}
