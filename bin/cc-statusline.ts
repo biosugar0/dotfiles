@@ -37,11 +37,13 @@ type StatusLineInput = {
     original_repo_dir?: string;
   };
   session_id?: string;
+  session_name?: string;
   transcript_path?: string;
 };
 
 type SummaryCache = {
   summary: string;
+  slug: string;
   updated_at: number;
 };
 
@@ -156,6 +158,12 @@ async function getTokenFromKeychain(): Promise<string | null> {
   }
 }
 
+function extractUserText(content: unknown): string {
+  if (typeof content === "string") return content;
+  // Array content is typically tool_result blocks, not human input — skip
+  return "";
+}
+
 async function getFirstUserMessage(transcriptPath: string): Promise<string> {
   try {
     const file = await Deno.open(transcriptPath, { read: true });
@@ -174,9 +182,12 @@ async function getFirstUserMessage(transcriptPath: string): Promise<string> {
         if (!line.trim()) continue;
         try {
           const obj = JSON.parse(line);
-          if (obj.type === "user" && typeof obj.message?.content === "string") {
-            file.close();
-            return obj.message.content.slice(0, 500);
+          if (obj.type === "user") {
+            const text = extractUserText(obj.message?.content);
+            if (text && text.length >= 10) {
+              file.close();
+              return text.slice(0, 500);
+            }
           }
         } catch {
           continue;
@@ -197,8 +208,8 @@ async function getRecentUserMessages(
   try {
     const stat = await Deno.stat(transcriptPath);
     const fileSize = stat.size ?? 0;
-    // Read last 64KB
-    const readSize = Math.min(fileSize, 65536);
+    // Read last 256KB (tool_result blocks can be large, need enough range to find human messages)
+    const readSize = Math.min(fileSize, 262144);
     const file = await Deno.open(transcriptPath, { read: true });
     await file.seek(-readSize, Deno.SeekMode.End);
     const buf = new Uint8Array(readSize);
@@ -210,8 +221,9 @@ async function getRecentUserMessages(
       if (!line.trim()) continue;
       try {
         const obj = JSON.parse(line);
-        if (obj.type === "user" && typeof obj.message?.content === "string") {
-          messages.push(obj.message.content.slice(0, 200));
+        if (obj.type === "user") {
+          const text = extractUserText(obj.message?.content);
+          if (text) messages.push(text.slice(0, 200));
         }
       } catch {
         continue;
@@ -227,7 +239,8 @@ async function summarizeWithHaiku(
   firstMessage: string,
   recentMessages: string[],
   token: string,
-): Promise<string> {
+): Promise<{ summary: string; slug: string }> {
+  const empty = { summary: "", slug: "" };
   try {
     const recentPart = recentMessages.length > 0
       ? `\n\n最近の指示:\n${recentMessages.map((m, i) => `${i + 1}. ${m}`).join("\n")}`
@@ -242,23 +255,30 @@ async function summarizeWithHaiku(
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 64,
+        max_tokens: 80,
         messages: [
           {
             role: "user",
-            content: `セッション情報から40文字以内の日本語1行で要約せよ。
+            content: `セッション情報から2行で出力せよ。
 
-出力形式: <テーマ>:<直近論点>
-- テーマ = 最初の指示から判断するセッション全体の主題(短い名詞句)
+1行目: 40文字以内の日本語要約 (<テーマ>:<直近論点>)
+2行目: 2-3語の英語kebab-case slug (例: statusline-session-title, oauth-token-fix)
+
+要約ルール:
+- テーマ = セッション全体の主題(短い名詞句)
 - 直近論点 = 最近の指示から判断する直近の具体論点
 - 進捗や次の行動は推測しない
 - 抽象語を避け、機能名や設定名を優先
-- 不確実なら最近の質問を短く言い換える
 - 接頭辞・装飾不要
-- 情報不足で要約できない場合は「-」とだけ出力
+- 情報不足なら「-」とだけ出力
 
-良い例: "statusline改善:要約形式の見直し", "OAuth対応:キャッシュTTLの扱い", "tmux設定:pane移動キーの競合"
-悪い例: "statusline改善:調整中", "dotfiles改善:いろいろ修正"
+slugルール:
+- 英語のkebab-case、2-3語
+- セッションの主題を端的に表す
+- 例: hook-session-title, changelog-review, statusline-summary
+
+良い要約例: "statusline改善:要約形式の見直し", "OAuth対応:キャッシュTTLの扱い"
+悪い要約例: "statusline改善:調整中", "dotfiles改善:いろいろ修正"
 
 最初の指示:
 ${firstMessage}${recentPart}`,
@@ -269,12 +289,17 @@ ${firstMessage}${recentPart}`,
     });
     const data = await resp.json();
     const text = data?.content?.[0]?.text?.trim() ?? "";
-    // Discard if it looks like an explanation rather than a summary
-    if (!text || text === "-" || text.length > 60 || (!text.includes(":") && !text.includes("："))) return "";
-    // Normalize full-width colon to half-width for consistent display
-    return text.replace(/：/g, ":").slice(0, 50);
+    const lines = text.split("\n").map((l: string) => l.trim()).filter(Boolean);
+    // Parse summary (line 1)
+    const summaryLine = lines[0] ?? "";
+    if (!summaryLine || summaryLine === "-" || summaryLine.includes("理由") || summaryLine.includes("判断できません") || summaryLine.length > 60 || (!summaryLine.includes(":") && !summaryLine.includes("："))) return empty;
+    const summary = summaryLine.replace(/：/g, ":").slice(0, 50);
+    // Parse slug (line 2)
+    const rawSlug = (lines[1] ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 30);
+    const slug = rawSlug || "";
+    return { summary, slug };
   } catch {
-    return "";
+    return empty;
   }
 }
 
@@ -330,14 +355,14 @@ async function refreshSummary(
   const token = await getTokenFromKeychain();
   if (!token) return "";
 
-  const summary = await summarizeWithHaiku(firstMsg, recentMsgs, token);
-  if (summary) {
-    const cache: SummaryCache = { summary, updated_at: Date.now() };
+  const result = await summarizeWithHaiku(firstMsg, recentMsgs, token);
+  if (result.summary) {
+    const cache: SummaryCache = { summary: result.summary, slug: result.slug, updated_at: Date.now() };
     try {
       await Deno.writeTextFile(cacheFile, JSON.stringify(cache));
     } catch { /* ignore */ }
   }
-  return summary;
+  return result.summary;
 }
 
 function formatResetTime(epochSec: number): string {
@@ -381,9 +406,11 @@ async function main() {
 
   const sep = `${GRAY} │ ${RESET}`;
 
-  // Line 1: Session summary (top priority — resumption cue)
+  // Line 1: Session summary with session_name as fallback
   if (sessionSummary) {
     console.log(`${YELLOW}📋 ${sessionSummary}${RESET}`);
+  } else if (input.session_name) {
+    console.log(`${YELLOW}📋 ${input.session_name}${RESET}`);
   }
 
   // Line 2: model | dir | lines | branch | context bar | duration

@@ -158,7 +158,7 @@
       "Write(.env*)",
       "Write(**/secrets/**)"
     ],
-    "defaultMode": "auto",
+    "defaultMode": "bypassPermissions",
     "additionalDirectories": [
       "{{ .chezmoi.homeDir }}/.config/claude/plans/"
     ]
@@ -285,7 +285,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat ~/.config/claude/hooks/data/workflow-instructions.md | jq -Rs '{hookSpecificOutput:{hookEventName:\"UserPromptSubmit\",additionalContext:.}}'",
+            "command": "$HOME/.config/claude/hooks/userpromptsubmit-context.sh",
             "timeout": 5
           }
         ]
