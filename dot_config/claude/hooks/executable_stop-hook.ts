@@ -156,7 +156,7 @@ async function main(): Promise<void> {
     }
 
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-    const sessionToken = Deno.env.get("CLAUDE_CODE_SESSION_ACCESS_TOKEN");
+    const sessionToken = Deno.env.get("CLAUDE_CODE_OAUTH_TOKEN");
     const keychainToken = (!apiKey && !sessionToken) ? await getTokenFromKeychain() : null;
     if (!apiKey && !sessionToken && !keychainToken) {
       Deno.exit(0);
