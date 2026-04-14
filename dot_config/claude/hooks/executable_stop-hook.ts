@@ -12,6 +12,7 @@ interface StopHookInput {
 interface StopDecisionInput {
   should_stop: boolean;
   reason: string;
+  done_summary?: string;
 }
 
 interface TranscriptEntry {
@@ -36,6 +37,11 @@ const STOP_DECISION_TOOL: Anthropic.Tool = {
         type: "string",
         description: "Brief reason for the decision in Japanese",
       },
+      done_summary: {
+        type: "string",
+        description:
+          "Only when should_stop=true: a 15-40 character Japanese summary of what Claude actually did this turn (for audio notification). Use noun phrases. Omit entirely when should_stop=false.",
+      },
     },
     required: ["should_stop", "reason"],
   },
@@ -56,6 +62,8 @@ Rules:
 - If "Verification evidence: PASS", factor it positively into stop decision
 - If "Context health: HIGH USAGE" and work is incomplete, suggest --fork-session in the reason
 - Default: approve stop
+
+When you APPROVE stop (should_stop=true), also set done_summary: a 15-40 character Japanese phrase describing what Claude actually DID this turn (not what it will do next). Use concise noun phrases. Examples: "sayラッパー作成と動作確認", "stop hookに音声要約を追加", "dotfilesのCLAUDE.md修正". Omit done_summary when should_stop=false.
 
 Call stop_decision with your judgment.`;
 
@@ -266,6 +274,25 @@ async function main(): Promise<void> {
           reason: decision.reason || "タスクが未完了",
         }),
       );
+    } else if (
+      decision.done_summary &&
+      Deno.env.get("CLAUDE_SAY_MUTE") !== "1"
+    ) {
+      // Fire-and-forget audio notification of what was done this turn.
+      // say-notify escapes the cage sandbox via launchctl asuser.
+      try {
+        const home = Deno.env.get("HOME");
+        if (home) {
+          new Deno.Command(`${home}/.config/claude/bin/say-notify`, {
+            args: [decision.done_summary],
+            stdin: "null",
+            stdout: "null",
+            stderr: "null",
+          }).spawn();
+        }
+      } catch {
+        // speech is best-effort; never block stop
+      }
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
