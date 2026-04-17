@@ -2,11 +2,19 @@
 
 thinkする場合、
 思考は英語で、思考の開始時に"Thinking in English… "で、終了時は回答との境界がわかりやすいように回答の前にthinkingの中で"Okay, I'll begin my response."  とthinkしてから回答を始める。
-Do think in English!
+常に自分の思考に疑問を持ち、推測に対して待てよそれは正しいか？と慎重によく思考すること。
 
 ## Task
 
-subagentに依頼できる疎結合なタスクはsubagentを作成して依頼する。
+subagentに依頼できる疎結合なタスクはsubagentを**積極的に**作成して依頼する。
+Opus 4.7はデフォルトでsubagent生成を減らす傾向があるため、以下のケースでは意識的に委譲する:
+
+- **独立・並列化可能**: 複数の独立した調査・検証・実装がある → 同一メッセージ内で複数subagentを並列起動
+- **コンテキスト保護**: 大量のファイル走査・grep結果・ログ解析など、main contextを汚染する探索 → Explore/general-purpose agent
+- **専門性が一致**: ci-quality-checker, Plan, claude-code-guide等、agent descriptionに合致するタスク
+- **疎結合な実装**: 他と依存せず独立に進められる実装単位 → 実装agentに委譲
+
+逆に委譲しないケース: ファイルパス既知のRead、特定symbolのGrep、ユーザーとの対話が必要な判断。
 
 ## PRの作成
 
