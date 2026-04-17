@@ -6,7 +6,7 @@ description: >-
 user-invocable: true
 argument-hint: "[対象の説明] or 省略で直近の変更を評価"
 context: fork
-effort: high
+effort: xhigh
 allowed-tools:
   - Read
   - Grep

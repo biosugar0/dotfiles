@@ -14,7 +14,7 @@ description: |
   - TODOリストに3つ以上の未完了タスクが存在する
   - ユーザーが1つの発言で3つ以上の作業を依頼している
   - plan/specに複数の実装ステップが記載されている
-effort: high
+effort: xhigh
 ---
 
 Read ./INSTRUCTIONS.md and follow the instructions.
