@@ -42,6 +42,20 @@ latest_user() {
         | (.[0] // "")' 2>/dev/null
 }
 
+# Trim a block to fit the preview viewport. Shows the last TRIM_LINES,
+# prepending an elision marker when the content has more lines than that.
+trim_tail() {
+  local max=${1:-30}
+  local input="$2"
+  local n=$(printf '%s' "$input" | awk 'END{print NR}')
+  if [[ "$n" -gt "$max" ]]; then
+    printf '… (%d lines total, showing last %d)\n' "$n" "$max"
+    printf '%s' "$input" | tail -n "$max"
+  else
+    printf '%s' "$input"
+  fi
+}
+
 if [[ -n "$jsonl" && -f "$jsonl" ]]; then
   # Read the last 200KB of the transcript once; extract user/assistant
   # in parallel subshells that read from the shared temp file.
@@ -54,9 +68,9 @@ if [[ -n "$jsonl" && -f "$jsonl" ]]; then
   asst_msg=$(cat "$tmp.asst")
   rm -f "$tmp" "$tmp.user" "$tmp.asst"
   printf '━━ User (latest) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-  printf '%s\n\n' "${user_msg:-(none)}"
+  printf '%s\n\n' "$(trim_tail 10 "${user_msg:-(none)}")"
   printf '━━ Assistant (latest) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-  printf '%s\n\n' "${asst_msg:-(no text response yet)}"
+  printf '%s\n\n' "$(trim_tail 30 "${asst_msg:-(no text response yet)}")"
 fi
 
 if [[ -n "$pane_id" ]]; then
