@@ -42,17 +42,44 @@ latest_user() {
         | (.[0] // "")' 2>/dev/null
 }
 
-# Trim a block to fit the preview viewport. Shows the last TRIM_LINES,
-# prepending an elision marker when the content has more lines than that.
+# ANSI styling. fzf preview window interprets escape sequences natively.
+BOLD=$'\033[1m'
+DIM=$'\033[2m'
+CYAN=$'\033[38;5;75m'
+GREEN=$'\033[38;5;114m'
+YELLOW=$'\033[38;5;179m'
+GREY=$'\033[38;5;244m'
+RESET=$'\033[0m'
+
+# Render a section header: colored block + uppercase label + dimmed meta.
+header() {
+  local color=$1 label=$2 meta=${3:-}
+  local meta_str=""
+  [[ -n "$meta" ]] && meta_str="${DIM} · ${meta}${RESET}"
+  printf '%s▌%s %s%s%s%s\n' "$color" "$RESET" "${BOLD}${color}" "$label" "${RESET}" "$meta_str"
+}
+
+# Trim a block to fit the preview viewport (prints last N lines).
 trim_tail() {
-  local max=${1:-30}
-  local input="$2"
-  local n=$(printf '%s' "$input" | awk 'END{print NR}')
+  local max=$1 input=$2 n
+  n=$(printf '%s' "$input" | awk 'END{print NR}')
   if [[ "$n" -gt "$max" ]]; then
-    printf '… (%d lines total, showing last %d)\n' "$n" "$max"
     printf '%s' "$input" | tail -n "$max"
   else
     printf '%s' "$input"
+  fi
+}
+
+# Meta string describing trim status, e.g. "72 lines · last 30" or "4 lines".
+meta_for() {
+  local max=$1 input=$2 n
+  n=$(printf '%s' "$input" | awk 'END{print NR}')
+  if [[ "$n" -gt "$max" ]]; then
+    printf '%d lines · last %d' "$n" "$max"
+  elif [[ "$n" -le 1 ]]; then
+    printf '%d line' "$n"
+  else
+    printf '%d lines' "$n"
   fi
 }
 
@@ -67,13 +94,16 @@ if [[ -n "$jsonl" && -f "$jsonl" ]]; then
   user_msg=$(cat "$tmp.user")
   asst_msg=$(cat "$tmp.asst")
   rm -f "$tmp" "$tmp.user" "$tmp.asst"
-  printf '━━ User (latest) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-  printf '%s\n\n' "$(trim_tail 10 "${user_msg:-(none)}")"
-  printf '━━ Assistant (latest) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-  printf '%s\n\n' "$(trim_tail 30 "${asst_msg:-(no text response yet)}")"
+
+  umsg="${user_msg:-(none)}"
+  amsg="${asst_msg:-(no text response yet)}"
+  header "$CYAN" "USER" "$(meta_for 10 "$umsg")"
+  printf '%s\n\n' "$(trim_tail 10 "$umsg")"
+  header "$GREEN" "ASSISTANT" "$(meta_for 30 "$amsg")"
+  printf '%s\n\n' "$(trim_tail 30 "$amsg")"
 fi
 
 if [[ -n "$pane_id" ]]; then
-  printf '━━ Live pane tail ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+  header "$YELLOW" "LIVE PANE" "$pane_id"
   tmux capture-pane -pJ -t "$pane_id" -S -100 2>/dev/null | tail -n 15
 fi
