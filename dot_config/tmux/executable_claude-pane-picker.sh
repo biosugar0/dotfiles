@@ -20,6 +20,17 @@ find_claude_pid() {
   done | head -n1
 }
 
+# Extract user-specified custom title from /rename. Latest wins.
+custom_title() {
+  local jsonl=$1
+  [[ -f "$jsonl" ]] || { echo ""; return; }
+  grep '"type":"custom-title"' "$jsonl" 2>/dev/null \
+    | tail -1 \
+    | jq -r '.customTitle // ""' 2>/dev/null \
+    | tr '\n\r\t' '   ' \
+    | cut -c1-60
+}
+
 # Extract first meaningful user message from a jsonl transcript.
 # Skips "pick-task" (zsh function default), system-reminder blocks,
 # and tool_result arrays. Returns first string content or first array
@@ -71,7 +82,14 @@ while IFS='|' read -r target pane_id pane_pid cmd cwd; do
     scwd=$(jq -r .cwd "$SESSIONS_DIR/$claude_pid.json" 2>/dev/null || true)
     if [[ -n "$sid" && -n "$scwd" ]]; then
       encoded=$(printf '%s' "$scwd" | sed -e 's|/|-|g' -e 's|\.|-|g')
-      msg=$(first_user_msg "$PROJECTS_DIR/$encoded/$sid.jsonl")
+      jsonl="$PROJECTS_DIR/$encoded/$sid.jsonl"
+      # Prefer user-curated custom title; skip auto-generated {project}/{branch}
+      title=$(custom_title "$jsonl")
+      if [[ -n "$title" && "$title" != "$project/"* && "$title" != "$project" ]]; then
+        msg="$title"
+      else
+        msg=$(first_user_msg "$jsonl")
+      fi
     fi
   fi
   rows+="$target"$'\t'"$project"$'\t'"$msg"$'\t'"$cmd"$'\t'"$pane_id"$'\n'
@@ -82,7 +100,7 @@ done <<< "$list"
 selected=$(printf '%s' "$rows" \
   | fzf --delimiter=$'\t' \
         --with-nth=1,2,3 \
-        --header='target / project / first-message' \
+        --header='target / project / title-or-first-message' \
         --preview 'tmux capture-pane -p -t {5} -S -50' \
         --preview-window=right:60% || true)
 
