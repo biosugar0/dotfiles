@@ -113,7 +113,8 @@ selected=$(
         --with-nth=1,2,3 \
         --header='target / project / title-or-first-message' \
         --preview "$HOME/.config/tmux/claude-preview.sh {5} {6}" \
-        --preview-window=right:60%:wrap || true
+        --preview-window=right:60%:wrap \
+        --preview-wrap-sign=' ' || true
 )
 
 [[ -z "$selected" ]] && exit 0
