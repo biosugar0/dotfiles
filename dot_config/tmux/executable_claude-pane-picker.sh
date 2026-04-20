@@ -77,6 +77,7 @@ while IFS='|' read -r target pane_id pane_pid cmd cwd; do
   project=$(basename "${cwd:-unknown}")
   claude_pid=$(find_claude_pid "$pane_pid" || true)
   msg=""
+  jsonl=""
   if [[ -n "$claude_pid" && -f "$SESSIONS_DIR/$claude_pid.json" ]]; then
     sid=$(jq -r .sessionId "$SESSIONS_DIR/$claude_pid.json" 2>/dev/null || true)
     scwd=$(jq -r .cwd "$SESSIONS_DIR/$claude_pid.json" 2>/dev/null || true)
@@ -92,7 +93,7 @@ while IFS='|' read -r target pane_id pane_pid cmd cwd; do
       fi
     fi
   fi
-  rows+="$target"$'\t'"$project"$'\t'"$msg"$'\t'"$cmd"$'\t'"$pane_id"$'\n'
+  rows+="$target"$'\t'"$project"$'\t'"$msg"$'\t'"$cmd"$'\t'"$pane_id"$'\t'"$jsonl"$'\n'
 done <<< "$list"
 
 [[ -z "$rows" ]] && { tmux display-message "no claude panes"; exit 0; }
@@ -101,7 +102,7 @@ selected=$(printf '%s' "$rows" \
   | fzf --delimiter=$'\t' \
         --with-nth=1,2,3 \
         --header='target / project / title-or-first-message' \
-        --preview 'tmux capture-pane -pJ -t {5} -S -200 | tail -n 60' \
+        --preview "$HOME/.config/tmux/claude-preview.sh {5} {6}" \
         --preview-window=right:60%:wrap || true)
 
 [[ -z "$selected" ]] && exit 0
