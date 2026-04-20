@@ -94,15 +94,17 @@ process_pane() {
 # Stream each pane's row into fzf as soon as its extraction finishes.
 # fzf can render partial lists immediately so the popup feels responsive
 # even before the slowest jsonl finishes parsing.
+# NOTE: filtering uses [[ ]] instead of `case`, because bash's parser
+# mishandles a `)` inside a case pattern when the whole block lives
+# inside $(...) — triggered the `syntax error near unexpected token ";;"`
+# on the deployed script.
 selected=$(
   {
     while IFS='|' read -r target pane_id pane_pid cmd cwd; do
       [[ -z "$cmd" ]] && continue
-      case "$cmd" in
-        [0-9]*.[0-9]*.[0-9]*|*claude*) ;;
-        *) continue ;;
-      esac
-      process_pane "$target" "$pane_id" "$pane_pid" "$cmd" "$cwd" &
+      if [[ "$cmd" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || "$cmd" == *claude* ]]; then
+        process_pane "$target" "$pane_id" "$pane_pid" "$cmd" "$cwd" &
+      fi
     done <<< "$list"
     wait
   } \
