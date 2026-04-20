@@ -65,23 +65,20 @@ if [[ -z "$list" ]]; then
   exit 0
 fi
 
-rows=""
-while IFS='|' read -r target pane_id pane_pid cmd cwd; do
-  [[ -z "$cmd" ]] && continue
-  case "$cmd" in
-    [0-9]*.[0-9]*.[0-9]*|*claude*) ;;
-    *) continue ;;
-  esac
+# Per-pane row builder; output to a dedicated file so parallel jobs don't
+# interleave their stdout and ordering is preserved by numeric filename.
+process_pane() {
+  local idx=$1 target=$2 pane_id=$3 pane_pid=$4 cmd=$5 cwd=$6
+  local project claude_pid msg jsonl sid scwd encoded title
   project=$(basename "${cwd:-unknown}")
   claude_pid=$(find_claude_pid "$pane_pid" || true)
   msg=""
   jsonl=""
   if [[ -n "$claude_pid" && -f "$SESSIONS_DIR/$claude_pid.json" ]]; then
     IFS='|' read -r sid scwd < <(jq -r '"\(.sessionId)|\(.cwd)"' "$SESSIONS_DIR/$claude_pid.json" 2>/dev/null || true)
-    if [[ -n "$sid" && -n "$scwd" ]]; then
+    if [[ -n "${sid:-}" && -n "${scwd:-}" ]]; then
       encoded=$(printf '%s' "$scwd" | sed -e 's|/|-|g' -e 's|\.|-|g')
       jsonl="$PROJECTS_DIR/$encoded/$sid.jsonl"
-      # Prefer user-curated custom title; skip auto-generated {project}/{branch}
       title=$(custom_title "$jsonl")
       if [[ -n "$title" && "$title" != "$project/"* && "$title" != "$project" ]]; then
         msg="$title"
@@ -90,8 +87,25 @@ while IFS='|' read -r target pane_id pane_pid cmd cwd; do
       fi
     fi
   fi
-  rows+="$target"$'\t'"$project"$'\t'"$msg"$'\t'"$cmd"$'\t'"$pane_id"$'\t'"$jsonl"$'\n'
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$target" "$project" "$msg" "$cmd" "$pane_id" "$jsonl" \
+    > "$TMPDIR_PICK/row-$(printf '%03d' "$idx")"
+}
+
+TMPDIR_PICK=$(mktemp -d)
+trap 'rm -rf "$TMPDIR_PICK"' EXIT
+idx=0
+while IFS='|' read -r target pane_id pane_pid cmd cwd; do
+  [[ -z "$cmd" ]] && continue
+  case "$cmd" in
+    [0-9]*.[0-9]*.[0-9]*|*claude*) ;;
+    *) continue ;;
+  esac
+  idx=$((idx+1))
+  process_pane "$idx" "$target" "$pane_id" "$pane_pid" "$cmd" "$cwd" &
 done <<< "$list"
+wait
+
+rows=$(cat "$TMPDIR_PICK"/row-* 2>/dev/null || true)
 
 [[ -z "$rows" ]] && { tmux display-message "no claude panes"; exit 0; }
 
