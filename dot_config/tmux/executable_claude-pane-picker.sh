@@ -108,7 +108,8 @@ selected=$(
     done <<< "$list"
     wait
   } \
-  | fzf --delimiter=$'\t' \
+  | fzf --ansi \
+        --delimiter=$'\t' \
         --with-nth=1,2,3 \
         --header='target / project / title-or-first-message' \
         --preview "$HOME/.config/tmux/claude-preview.sh {5} {6}" \
