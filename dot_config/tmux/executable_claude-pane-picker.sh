@@ -21,10 +21,12 @@ find_claude_pid() {
 }
 
 # Extract user-specified custom title from /rename. Latest wins.
+# Scans only the last 200KB to stay fast on multi-MB transcripts.
 custom_title() {
   local jsonl=$1
   [[ -f "$jsonl" ]] || { echo ""; return; }
-  grep '"type":"custom-title"' "$jsonl" 2>/dev/null \
+  tail -c 200000 "$jsonl" 2>/dev/null \
+    | grep '"type":"custom-title"' \
     | tail -1 \
     | jq -r '.customTitle // ""' 2>/dev/null \
     | tr '\n\r\t' '   ' \
@@ -34,31 +36,27 @@ custom_title() {
 # Extract first meaningful user message from a jsonl transcript.
 # Skips "pick-task" (zsh function default), system-reminder blocks,
 # and tool_result arrays. Returns first string content or first array
-# text block that passes the filter.
+# text block that passes the filter. Single-pass jq (~10ms vs ~400ms
+# when invoked per line).
 first_user_msg() {
   local jsonl=$1
   [[ -f "$jsonl" ]] || { echo ""; return; }
-  local msg="" text
-  while IFS= read -r line; do
-    [[ -z "$line" ]] && continue
-    text=$(printf '%s' "$line" | jq -r '
-      select((.message.role // "") == "user")
-      | .message.content
-      | if type=="string" then .
-        elif type=="array" then ([.[]? | select(.type=="text") | .text] | join(" "))
-        else "" end' 2>/dev/null)
-    text=$(printf '%s' "$text" | tr '\n\r\t' '   ' | sed -E 's/^ +//; s/ +$//')
-    if [[ -n "$text" \
-        && "$text" != "pick-task" \
-        && "$text" != "<system-reminder>"* \
-        && "$text" != "Base directory for this skill:"* \
-        && "$text" != "<command-"* \
-        && "$text" != "[Request interrupted by user]"* ]]; then
-      msg="$text"
-      break
-    fi
-  done < <(grep -m40 '"type":"user"' "$jsonl" 2>/dev/null)
-  printf '%s' "${msg:0:60}"
+  grep -m40 '"type":"user"' "$jsonl" 2>/dev/null \
+    | jq -rs '
+        map(select((.message.role // "") == "user")
+            | .message.content
+            | if type=="string" then .
+              elif type=="array" then ([.[]? | select(.type=="text") | .text] | join(" "))
+              else "" end
+            | gsub("[\n\r\t]"; " ")
+            | sub("^ +"; "") | sub(" +$"; "")
+            | select(length > 0
+                and . != "pick-task"
+                and (startswith("<system-reminder>") | not)
+                and (startswith("Base directory for this skill:") | not)
+                and (startswith("<command-") | not)
+                and (startswith("[Request interrupted by user]") | not)))
+        | (.[0] // "")[0:60]' 2>/dev/null
 }
 
 list=$(tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index}|#{pane_id}|#{pane_pid}|#{pane_current_command}|#{pane_current_path}' 2>/dev/null || true)
@@ -79,8 +77,7 @@ while IFS='|' read -r target pane_id pane_pid cmd cwd; do
   msg=""
   jsonl=""
   if [[ -n "$claude_pid" && -f "$SESSIONS_DIR/$claude_pid.json" ]]; then
-    sid=$(jq -r .sessionId "$SESSIONS_DIR/$claude_pid.json" 2>/dev/null || true)
-    scwd=$(jq -r .cwd "$SESSIONS_DIR/$claude_pid.json" 2>/dev/null || true)
+    IFS='|' read -r sid scwd < <(jq -r '"\(.sessionId)|\(.cwd)"' "$SESSIONS_DIR/$claude_pid.json" 2>/dev/null || true)
     if [[ -n "$sid" && -n "$scwd" ]]; then
       encoded=$(printf '%s' "$scwd" | sed -e 's|/|-|g' -e 's|\.|-|g')
       jsonl="$PROJECTS_DIR/$encoded/$sid.jsonl"
