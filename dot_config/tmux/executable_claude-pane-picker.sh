@@ -65,10 +65,11 @@ if [[ -z "$list" ]]; then
   exit 0
 fi
 
-# Per-pane row builder; output to a dedicated file so parallel jobs don't
-# interleave their stdout and ordering is preserved by numeric filename.
+# Per-pane row builder. Prints a tab-separated row to stdout; intended to
+# run as a background job so rows stream into fzf as soon as each pane's
+# extraction finishes.
 process_pane() {
-  local idx=$1 target=$2 pane_id=$3 pane_pid=$4 cmd=$5 cwd=$6
+  local target=$1 pane_id=$2 pane_pid=$3 cmd=$4 cwd=$5
   local project claude_pid msg jsonl sid scwd encoded title
   project=$(basename "${cwd:-unknown}")
   claude_pid=$(find_claude_pid "$pane_pid" || true)
@@ -87,34 +88,30 @@ process_pane() {
       fi
     fi
   fi
-  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$target" "$project" "$msg" "$cmd" "$pane_id" "$jsonl" \
-    > "$TMPDIR_PICK/row-$(printf '%03d' "$idx")"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$target" "$project" "$msg" "$cmd" "$pane_id" "$jsonl"
 }
 
-TMPDIR_PICK=$(mktemp -d)
-trap 'rm -rf "$TMPDIR_PICK"' EXIT
-idx=0
-while IFS='|' read -r target pane_id pane_pid cmd cwd; do
-  [[ -z "$cmd" ]] && continue
-  case "$cmd" in
-    [0-9]*.[0-9]*.[0-9]*|*claude*) ;;
-    *) continue ;;
-  esac
-  idx=$((idx+1))
-  process_pane "$idx" "$target" "$pane_id" "$pane_pid" "$cmd" "$cwd" &
-done <<< "$list"
-wait
-
-rows=$(cat "$TMPDIR_PICK"/row-* 2>/dev/null || true)
-
-[[ -z "$rows" ]] && { tmux display-message "no claude panes"; exit 0; }
-
-selected=$(printf '%s' "$rows" \
+# Stream each pane's row into fzf as soon as its extraction finishes.
+# fzf can render partial lists immediately so the popup feels responsive
+# even before the slowest jsonl finishes parsing.
+selected=$(
+  {
+    while IFS='|' read -r target pane_id pane_pid cmd cwd; do
+      [[ -z "$cmd" ]] && continue
+      case "$cmd" in
+        [0-9]*.[0-9]*.[0-9]*|*claude*) ;;
+        *) continue ;;
+      esac
+      process_pane "$target" "$pane_id" "$pane_pid" "$cmd" "$cwd" &
+    done <<< "$list"
+    wait
+  } \
   | fzf --delimiter=$'\t' \
         --with-nth=1,2,3 \
         --header='target / project / title-or-first-message' \
         --preview "$HOME/.config/tmux/claude-preview.sh {5} {6}" \
-        --preview-window=right:60%:wrap || true)
+        --preview-window=right:60%:wrap || true
+)
 
 [[ -z "$selected" ]] && exit 0
 target=$(awk -F'\t' '{print $1}' <<< "$selected")

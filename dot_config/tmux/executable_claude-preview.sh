@@ -9,12 +9,9 @@ set -eu
 pane_id="${1:-}"
 jsonl="${2:-}"
 
-# Extract the most recent assistant text content. Reads only the last
-# 500KB of the jsonl to stay fast on multi-MB transcripts.
+# Extract the most recent assistant text content from a pre-buffered stream.
 latest_assistant() {
-  local f=$1
-  tail -c 500000 "$f" 2>/dev/null \
-    | grep '"type":"assistant"' \
+  grep '"type":"assistant"' \
     | tail -r 2>/dev/null \
     | head -20 \
     | jq -rs '
@@ -25,12 +22,9 @@ latest_assistant() {
         | (.[0] // "")' 2>/dev/null
 }
 
-# Extract the most recent user-typed prompt (string or text-block content),
-# skipping auto-injected boilerplate. Reads only the last 500KB.
+# Extract the most recent user-typed prompt from a pre-buffered stream.
 latest_user() {
-  local f=$1
-  tail -c 500000 "$f" 2>/dev/null \
-    | grep '"type":"user"' \
+  grep '"type":"user"' \
     | tail -r 2>/dev/null \
     | head -40 \
     | jq -rs '
@@ -49,8 +43,16 @@ latest_user() {
 }
 
 if [[ -n "$jsonl" && -f "$jsonl" ]]; then
-  user_msg=$(latest_user "$jsonl" || true)
-  asst_msg=$(latest_assistant "$jsonl" || true)
+  # Read the last 200KB of the transcript once; extract user/assistant
+  # in parallel subshells that read from the shared temp file.
+  tmp=$(mktemp)
+  tail -c 200000 "$jsonl" > "$tmp"
+  latest_user   < "$tmp" > "$tmp.user"   &
+  latest_assistant < "$tmp" > "$tmp.asst" &
+  wait
+  user_msg=$(cat "$tmp.user")
+  asst_msg=$(cat "$tmp.asst")
+  rm -f "$tmp" "$tmp.user" "$tmp.asst"
   printf '━━ User (latest) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
   printf '%s\n\n' "${user_msg:-(none)}"
   printf '━━ Assistant (latest) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
