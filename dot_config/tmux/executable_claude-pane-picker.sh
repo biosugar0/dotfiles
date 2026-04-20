@@ -101,8 +101,8 @@ selected=$(printf '%s' "$rows" \
   | fzf --delimiter=$'\t' \
         --with-nth=1,2,3 \
         --header='target / project / title-or-first-message' \
-        --preview 'tmux capture-pane -p -t {5} -S -50' \
-        --preview-window=right:60% || true)
+        --preview 'tmux capture-pane -pJ -t {5} -S -200 | tail -n 60' \
+        --preview-window=right:60%:wrap || true)
 
 [[ -z "$selected" ]] && exit 0
 target=$(awk -F'\t' '{print $1}' <<< "$selected")
