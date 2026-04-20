@@ -1,3 +1,13 @@
+{{- /*
+  Optional per-machine data (set in ~/.config/chezmoi/chezmoi.toml):
+    [data.hub]
+      new_issue_cmd = "/path/to/private/hub/scripts/new-issue-session.sh"
+      start_task_cmd = "/path/to/private/hub/scripts/start-task.sh"
+      repo = "org/hub-repo"
+  When unset, M-C falls back to plain `new-session` and hub-specific
+  bindings are omitted. Keeps this public config vendor-neutral.
+*/ -}}
+{{- $newIssueCmd := dig "hub" "new_issue_cmd" "" . -}}
 # =============================================================================
 # 基本設定
 # =============================================================================
@@ -103,7 +113,11 @@ bind -n M-Right run "tmux swap-window -t +1 && tmux next-window"
 bind a setw synchronize-panes \; display "synchronize-panes #{?pane_synchronized,on,off}"
 
 # セッション操作
+{{- if $newIssueCmd }}
+bind -n "M-C" display-popup -E -w 80% -h 70% {{ $newIssueCmd | quote }}
+{{- else }}
 bind -n M-C new-session
+{{- end }}
 
 # fzf連携 (-k でキー押下で閉じる)
 bind -n M-a choose-tree
