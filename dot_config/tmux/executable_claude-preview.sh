@@ -87,13 +87,14 @@ if [[ -n "$jsonl" && -f "$jsonl" ]]; then
   # Read the last 200KB of the transcript once; extract user/assistant
   # in parallel subshells that read from the shared temp file.
   tmp=$(mktemp)
+  # 早期 exit でも tmp を確実に消す (set -eu でも trap は発火する)。
+  trap 'rm -f "$tmp" "$tmp.user" "$tmp.asst"' EXIT
   tail -c 200000 "$jsonl" > "$tmp"
   latest_user   < "$tmp" > "$tmp.user"   &
   latest_assistant < "$tmp" > "$tmp.asst" &
   wait
   user_msg=$(cat "$tmp.user")
   asst_msg=$(cat "$tmp.asst")
-  rm -f "$tmp" "$tmp.user" "$tmp.asst"
 
   umsg="${user_msg:-(none)}"
   amsg="${asst_msg:-(no text response yet)}"
