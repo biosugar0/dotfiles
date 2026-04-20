@@ -1,3 +1,13 @@
+{{- /*
+  Optional per-machine data (set in ~/.config/chezmoi/chezmoi.toml):
+    [data.hub]
+      new_issue_cmd = "/path/to/private/hub/scripts/new-issue-session.sh"
+      start_task_cmd = "/path/to/private/hub/scripts/start-task.sh"
+      repo = "org/hub-repo"
+  When unset, M-C falls back to plain `new-session` and hub-specific
+  bindings are omitted. Keeps this public config vendor-neutral.
+*/ -}}
+{{- $newIssueCmd := dig "hub" "new_issue_cmd" "" . -}}
 # =============================================================================
 # 基本設定
 # =============================================================================
@@ -48,7 +58,7 @@ set -g status-right-length 90
 set -g status-fg "colour255"
 set -g status-bg "colour016"
 set -g status-left "#[fg=colour016,bg=colour075,bold] #S #[fg=colour075,bg=colour016,nobold]"
-set -g status-right '#[bold] CPU:#{cpu_percentage} | Battery: #{battery_icon}  #{battery_percentage} | [%Y-%m-%d(%a) %H:%M] '
+set -g status-right '#[bold]#(~/.config/tmux/claude-count.sh)| CPU:#{cpu_percentage} | Battery: #{battery_icon}  #{battery_percentage} | [%Y-%m-%d(%a) %H:%M] '
 
 # ウィンドウステータス
 setw -g window-status-separator ''
@@ -103,12 +113,19 @@ bind -n M-Right run "tmux swap-window -t +1 && tmux next-window"
 bind a setw synchronize-panes \; display "synchronize-panes #{?pane_synchronized,on,off}"
 
 # セッション操作
+{{- if $newIssueCmd }}
+bind -n "M-C" display-popup -E -w 80% -h 70% {{ $newIssueCmd | quote }}
+{{- else }}
 bind -n M-C new-session
+{{- end }}
 
 # fzf連携 (-k でキー押下で閉じる)
 bind -n M-a choose-tree
 bind -n "M-'" display-popup -E -k "tmux list-sessions -F '#S' | grep -v \"^$(tmux display-message -p '#S')\$\" | fzf --reverse | xargs tmux switch -t"
 bind -n "M-;" display-popup -E -k "tmux list-windows -F '#W' | grep -v \"^$(tmux display-message -p '#W')\$\" | fzf --reverse | xargs | xargs tmux select-window -t"
+
+# Claude pane picker (preview付き)
+bind -n "M-p" display-popup -E -w 80% -h 70% "~/.config/tmux/claude-pane-picker.sh"
 
 # =============================================================================
 # コピーモード (vi スタイル)
