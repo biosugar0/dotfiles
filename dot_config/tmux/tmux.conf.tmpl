@@ -4,8 +4,10 @@
       new_issue_cmd = "/path/to/private/hub/scripts/new-issue-session.sh"
       start_task_cmd = "/path/to/private/hub/scripts/start-task.sh"
       repo = "org/hub-repo"
-  When unset, M-C falls back to plain `new-session` and hub-specific
+  When unset, M-i falls back to plain `new-session` and hub-specific
   bindings are omitted. Keeps this public config vendor-neutral.
+  Note: Alt+C / Alt+Shift+C are reserved by aerospace (workspace C),
+  so the issue picker uses Alt+i (mnemonic: issue) instead.
 */ -}}
 {{- $newIssueCmd := dig "hub" "new_issue_cmd" "" . -}}
 # =============================================================================
@@ -113,10 +115,12 @@ bind -n M-Right run "tmux swap-window -t +1 && tmux next-window"
 bind a setw synchronize-panes \; display "synchronize-panes #{?pane_synchronized,on,off}"
 
 # セッション操作
+# Alt+i でこのバインドを発火する。Alt+C / Alt+Shift+C は aerospace が
+# workspace C (Communication) に予約しているため、tmux まで届かない。
 {{- if $newIssueCmd }}
-bind -n "M-C" display-popup -E -w 80% -h 70% {{ $newIssueCmd | quote }}
+bind -n "M-i" display-popup -E -w 80% -h 70% {{ $newIssueCmd | quote }}
 {{- else }}
-bind -n M-C new-session
+bind -n M-i new-session
 {{- end }}
 
 # fzf連携 (-k でキー押下で閉じる)
