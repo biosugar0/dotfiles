@@ -13,21 +13,33 @@ MCP ではなく CLI を使う理由: **トークン消費が約1/4**（MCP は 
 playwright-cli open https://example.com
 ```
 
-### Extension モード（既存 Chrome に接続）
+### Attach モード（普段使い Chrome に CDP 接続）※推奨
 
-**ログイン済みの Chrome セッションを利用する場合はこちらを使う。**
-Chrome にインストールした Playwright MCP Bridge 拡張機能経由で、既存のログイン・Cookie・セッションをそのまま利用できる。
+**ログイン済みの Chrome セッションを利用する場合はこれを第一選択にする（v0.1.8+）。**
+拡張機能不要で、普段使いの Chrome / Edge にそのまま attach する。
+
+**事前準備（初回のみ）**: Chrome で `chrome://inspect/#remote-debugging` を開き、「Allow remote debugging for this browser instance」を ON にする（Chrome 144+ 必須）。
 
 ```bash
-# トークンを自動取得して接続
+playwright-cli attach --cdp=chrome
+```
+
+対応チャンネル: `chrome`, `chrome-beta`, `chrome-dev`, `chrome-canary`, `msedge`, `msedge-beta`, `msedge-dev`, `msedge-canary`。
+任意の CDP エンドポイントに繋ぐ場合は `--cdp=http://localhost:9222` のように URL を渡す。
+
+- 初回接続時に Chrome 側で許可ダイアログが出る → 許可
+- `close` は CLI セッションのみ切断し、Chrome 本体は起動したまま
+- 接続中は「Chrome is being controlled by automated test software」バナーが表示される
+
+### Extension モード（Playwright MCP Bridge 拡張経由）
+
+`attach --cdp` が使えない環境（Chrome 144 未満、chrome://inspect トグル利用不可）向けのフォールバック。
+
+```bash
 PLAYWRIGHT_MCP_EXTENSION_TOKEN=$(playwright-ext-token) playwright-cli open --extension
 ```
 
-`playwright-ext-token` は Chrome の LevelDB からトークンを自動抽出するスクリプト。手動取得不要。
-
-- Chrome が起動済みで拡張機能が有効であること
-- トークン取得に失敗した場合は拡張機能の設定画面 (`chrome-extension://mmlmfjhmonkocbjadbfplnigmagldckm/status.html`) で確認
-- extension モードでは `close` しても Chrome 自体は閉じない（接続が切れるだけ）
+`playwright-ext-token` は Chrome の LevelDB からトークンを自動抽出。トークン取得失敗時は拡張の設定画面 (`chrome-extension://mmlmfjhmonkocbjadbfplnigmagldckm/status.html`) で確認。`close` で Chrome 本体は閉じない。
 
 ### Persistent モード（セッション永続化）
 
@@ -54,6 +66,8 @@ playwright-cli close
 
 ```bash
 playwright-cli open [url]               # ブラウザを開く
+playwright-cli attach [name]            # 起動中の Playwright ブラウザに attach
+playwright-cli attach --cdp=chrome      # 普段使い Chrome に CDP 接続 (v0.1.8+)
 playwright-cli goto <url>               # URL に遷移
 playwright-cli close                    # ブラウザを閉じる
 playwright-cli type <text>              # 編集可能な要素にテキスト入力
