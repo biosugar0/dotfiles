@@ -1,15 +1,18 @@
 {{- /*
   Optional per-machine data (set in ~/.config/chezmoi/chezmoi.toml):
     [data.hub]
-      new_issue_cmd = "/path/to/private/hub/scripts/new-issue-session.sh"
+      new_issue_cmd  = "/path/to/private/hub/scripts/new-issue-session.sh"
+      new_pm_cmd     = "/path/to/private/hub/scripts/new-pm-session.sh"
       start_task_cmd = "/path/to/private/hub/scripts/start-task.sh"
-      repo = "org/hub-repo"
+      repo           = "org/hub-repo"
   When unset, M-i falls back to plain `new-session` and hub-specific
   bindings are omitted. Keeps this public config vendor-neutral.
   Note: Alt+C / Alt+Shift+C are reserved by aerospace (workspace C),
   so the issue picker uses Alt+i (mnemonic: issue) instead.
+  M-m は aerospace と衝突しないことを確認済 (mnemonic: management)。
 */ -}}
 {{- $newIssueCmd := dig "hub" "new_issue_cmd" "" . -}}
+{{- $newPmCmd := dig "hub" "new_pm_cmd" "" . -}}
 # =============================================================================
 # 基本設定
 # =============================================================================
@@ -121,6 +124,13 @@ bind a setw synchronize-panes \; display "synchronize-panes #{?pane_synchronized
 bind -n "M-i" display-popup -E -w 80% -h 70% {{ $newIssueCmd | quote }}
 {{- else }}
 bind -n M-i new-session
+{{- end }}
+
+# PM session (task 管理・board・triage) 切替。IC 作業 session と分離して
+# claude の context window を節約する (mnemonic: M-m = management)。
+# #{client_name} を渡すことで multi-client 時も「押した端末」を切替対象にする。
+{{- if $newPmCmd }}
+bind -n "M-m" run-shell {{ printf "%s '#{client_name}'" $newPmCmd | quote }}
 {{- end }}
 
 # fzf連携 (-k でキー押下で閉じる)
