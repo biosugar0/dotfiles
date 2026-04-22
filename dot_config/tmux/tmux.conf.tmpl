@@ -50,7 +50,9 @@ set -g set-clipboard on
 set -g extended-keys on
 
 # OSC passthrough (WezTerm の OSC 777 通知等を外側端末に届ける)
-set -g allow-passthrough on
+# "all" は非アクティブ pane / 非可視 window からも passthrough する。
+# Claude pane が裏で動いている時も通知を届けたいので "on" ではなく "all"。
+set -g allow-passthrough all
 
 # =============================================================================
 # 外観設定
