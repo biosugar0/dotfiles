@@ -274,24 +274,39 @@ async function main(): Promise<void> {
           reason: decision.reason || "タスクが未完了",
         }),
       );
-    } else if (
-      decision.done_summary &&
-      Deno.env.get("CLAUDE_SAY_MUTE") !== "1"
-    ) {
-      // Fire-and-forget audio notification of what was done this turn.
-      // say-notify escapes the cage sandbox via launchctl asuser.
-      try {
-        const home = Deno.env.get("HOME");
-        if (home) {
-          new Deno.Command(`${home}/.config/claude/bin/say-notify`, {
-            args: [decision.done_summary],
+    } else if (decision.done_summary) {
+      const home = Deno.env.get("HOME");
+      const summary = decision.done_summary;
+      const cwd = Deno.env.get("CLAUDE_PROJECT_DIR") ?? Deno.cwd();
+      const proj = cwd.split("/").pop() ?? "";
+      const title = proj ? `[Stop] ${proj}` : "[Stop] Claude Code";
+
+      if (home) {
+        // OSC 777 toast — CLAUDE_SAY_MUTE でも出す (visual only)
+        try {
+          new Deno.Command(`${home}/.config/claude/hooks/osc-notify.sh`, {
+            args: [title, summary],
             stdin: "null",
             stdout: "null",
             stderr: "null",
           }).spawn();
+        } catch {
+          // best-effort
         }
-      } catch {
-        // speech is best-effort; never block stop
+
+        // 音声 — CLAUDE_SAY_MUTE=1 ならスキップ
+        if (Deno.env.get("CLAUDE_SAY_MUTE") !== "1") {
+          try {
+            new Deno.Command(`${home}/.config/claude/bin/say-notify`, {
+              args: [summary],
+              stdin: "null",
+              stdout: "null",
+              stderr: "null",
+            }).spawn();
+          } catch {
+            // speech is best-effort; never block stop
+          }
+        }
       }
     }
   } catch (error) {
