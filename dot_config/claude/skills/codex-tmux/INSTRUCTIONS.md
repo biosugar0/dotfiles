@@ -44,8 +44,13 @@ CODEX_PANE=$(tmux split-window -v -f -d -l 30% -t "$TMUX_PANE" -P -F '#{pane_id}
 # paneにタイトルを設定（トピックに応じた名前をつける）
 tmux select-pane -t "$CODEX_PANE" -T "codex-<topic>"
 
+# repo root を解決して -c で trust_level=trusted を注入
+# （worktree/サブディレクトリ起動時の "Do you trust this directory?" プロンプトを抑止）
+# 通常 repo の toplevel、git 外なら PWD にフォールバック
+_codex_root=$(git rev-parse --path-format=absolute --show-toplevel 2>/dev/null || pwd)
+
 # send-keysでcodex起動コマンドを送信
-tmux send-keys -t "$CODEX_PANE" "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox \"\$(cat /tmp/codex-prompt.txt)\"" Enter
+tmux send-keys -t "$CODEX_PANE" "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox -c 'projects.\"$_codex_root\".trust_level=\"trusted\"' \"\$(cat /tmp/codex-prompt.txt)\"" Enter
 ```
 
 ### Step 2: 完了検知
