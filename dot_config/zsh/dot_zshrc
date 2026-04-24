@@ -17,7 +17,7 @@ alias awk='gawk'
 alias killclaude='pkill -f -i claude'
 claude() {
   if [ $# -eq 0 ]; then
-    cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config=$XDG_CONFIG_HOME/claude/mcp.json pick-task
+    cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config=$XDG_CONFIG_HOME/claude/mcp.json
   else
     cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config=$XDG_CONFIG_HOME/claude/mcp.json "$@"
   fi
