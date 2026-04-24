@@ -46,11 +46,16 @@ tmux select-pane -t "$CODEX_PANE" -T "codex-<topic>"
 
 # repo root を解決して -c で trust_level=trusted を注入
 # （worktree/サブディレクトリ起動時の "Do you trust this directory?" プロンプトを抑止）
-# 通常 repo の toplevel、git 外なら PWD にフォールバック
-_codex_root=$(git rev-parse --path-format=absolute --show-toplevel 2>/dev/null || pwd)
+# 注: codex の -c は dotted key の quoted segment を解釈せず生 split するため、
+#     key 側は単一トークン `projects` のみにして値を inline table で渡す。
+# git 外（toplevel 未解決）では override を付けない（/tmp 等の誤 auto-trust 防止）。
+_codex_root=$(git rev-parse --path-format=absolute --show-toplevel 2>/dev/null || true)
 
-# send-keysでcodex起動コマンドを送信
-tmux send-keys -t "$CODEX_PANE" "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox -c 'projects.\"$_codex_root\".trust_level=\"trusted\"' \"\$(cat /tmp/codex-prompt.txt)\"" Enter
+if [ -n "$_codex_root" ]; then
+  tmux send-keys -t "$CODEX_PANE" "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox -c 'projects={\"$_codex_root\"={trust_level=\"trusted\"}}' \"\$(cat /tmp/codex-prompt.txt)\"" Enter
+else
+  tmux send-keys -t "$CODEX_PANE" "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox \"\$(cat /tmp/codex-prompt.txt)\"" Enter
+fi
 ```
 
 ### Step 2: 完了検知
