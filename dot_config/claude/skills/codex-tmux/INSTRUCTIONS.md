@@ -44,8 +44,30 @@ CODEX_PANE=$(tmux split-window -v -f -d -l 30% -t "$TMUX_PANE" -P -F '#{pane_id}
 # paneにタイトルを設定（トピックに応じた名前をつける）
 tmux select-pane -t "$CODEX_PANE" -T "codex-<topic>"
 
-# send-keysでcodex起動コマンドを送信
-tmux send-keys -t "$CODEX_PANE" "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox \"\$(cat /tmp/codex-prompt.txt)\"" Enter
+# repo root を解決して -c で trust_level=trusted を注入
+# （worktree/サブディレクトリ起動時の "Do you trust this directory?" プロンプトを抑止）
+#
+# 注1: codex の -c は dotted key の quoted segment を解釈せず生 split するため、
+#      key 側は単一トークン `projects` のみにして値を inline table で渡す。
+# 注2: Codex 本体の trust lookup は linked worktree を main repo root に正規化する
+#      ため、`--show-toplevel`（worktree root）ではなく `--git-common-dir` の親
+#      （main repo の `.git` の親 = main repo root）を trust target にする。
+#      bare repo / submodule / custom GIT_DIR / 非 git は intentionally no override
+#      （Codex 側の filesystem ベース trust 解決と揃わないので保守的に fallback）。
+# 既知制約: repo root path に `'`, `"`, `\` が含まれると shell/TOML quoting が破綻
+#           （一般的な repo path では踏まない）。
+_git_common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+if [ -n "$_git_common" ] && [ "$(basename "$_git_common")" = ".git" ]; then
+  _codex_root=$(dirname "$_git_common")
+else
+  _codex_root=""
+fi
+
+if [ -n "$_codex_root" ]; then
+  tmux send-keys -t "$CODEX_PANE" "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox -c 'projects={\"$_codex_root\"={trust_level=\"trusted\"}}' \"\$(cat /tmp/codex-prompt.txt)\"" Enter
+else
+  tmux send-keys -t "$CODEX_PANE" "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox \"\$(cat /tmp/codex-prompt.txt)\"" Enter
+fi
 ```
 
 ### Step 2: 完了検知
