@@ -22,6 +22,9 @@ claude() {
     cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config=$XDG_CONFIG_HOME/claude/mcp.json "$@"
   fi
 }
+clauder() {
+  cage -preset claude-code -- env -u CLAUDE_CODE_OAUTH_TOKEN GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config=$XDG_CONFIG_HOME/claude/mcp.json "$@"
+}
 alias codex='cage -preset claude-code -- env GIT_EDITOR=true codex --dangerously-bypass-approvals-and-sandbox'
 alias difit='npx difit'
 alias python=/opt/homebrew/bin/python3
