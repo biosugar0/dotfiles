@@ -178,31 +178,31 @@ gwn() {
   git wt --nocd "$@"
 }
 gwr() {
-  local selected path branch
+  local selected wt_branch
   selected=$(git wt --json 2>/dev/null | jq -r '.[] | select(.bare == false) | "\(.path)\t\(.branch)"' | fzf --delimiter='\t' \
     --with-nth=2 \
     --preview 'git -C {1} log --oneline -10' \
     --preview-window=right:50%)
-  [[ -n "$selected" ]] && branch=$(echo "$selected" | cut -f2) && git wt -d "$branch"
+  [[ -n "$selected" ]] && wt_branch=$(echo "$selected" | cut -f2) && git wt -d "$wt_branch"
 }
 gwa() {
-  local selected path
+  local selected wt_path
   selected=$(git wt --json 2>/dev/null | jq -r '.[] | select(.bare == false) | "\(.path)\t\(.branch)"' | fzf --delimiter='\t' \
     --with-nth=2 \
     --preview 'git -C {1} log --oneline -10' \
     --preview-window=right:50%)
-  [[ -n "$selected" ]] && path=$(echo "$selected" | cut -f1) && (cd "$path" && cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config=$XDG_CONFIG_HOME/claude/mcp.json "$@")
+  [[ -n "$selected" ]] && wt_path=$(echo "$selected" | cut -f1) && (cd "$wt_path" && cage -preset claude-code -- env GIT_EDITOR=true claude --dangerously-skip-permissions --mcp-config=$XDG_CONFIG_HOME/claude/mcp.json "$@")
 }
 gwe() {
-  local selected path
+  local selected wt_path
   selected=$(git wt --json 2>/dev/null | jq -r '.[] | select(.bare == false) | "\(.path)\t\(.branch)"' | fzf --delimiter='\t' \
     --with-nth=2 \
     --preview 'git -C {1} log --oneline -10' \
     --preview-window=right:50%)
-  [[ -n "$selected" ]] && path=$(echo "$selected" | cut -f1) && cursor "$path"
+  [[ -n "$selected" ]] && wt_path=$(echo "$selected" | cut -f1) && cursor "$wt_path"
 }
 gw() {
-  local selected path
+  local selected
   selected=$(git wt --json 2>/dev/null | jq -r '.[] | select(.bare == false) | "\(.path)\t\(.branch)"' | fzf --delimiter='\t' \
     --with-nth=2 \
     --preview 'git -C {1} log --oneline -10' \
