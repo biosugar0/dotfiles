@@ -1,10 +1,33 @@
 <!--
-Adapted from openai/codex-plugin-cc (Apache-2.0):
+SPDX-License-Identifier: Apache-2.0
+
+Copyright 2026 OpenAI
+Modifications copyright 2026 biosugar0
+
+This file is adapted from openai/codex-plugin-cc:
+  https://github.com/openai/codex-plugin-cc
   plugins/codex/prompts/adversarial-review.md
-Modifications:
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use this file except in compliance with the License. You may obtain a copy
+of the License at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+License for the specific language governing permissions and limitations
+under the License.
+
+Modifications from upstream:
   - Removed <structured_output_contract> JSON schema block (interactive use)
   - Replaced with <output_format> for human-readable findings
-  - Removed {{REVIEW_INPUT}} placeholder (Codex reads files itself in interactive mode)
+  - Removed {{REVIEW_INPUT}} / {{TARGET_LABEL}} / {{USER_FOCUS}} placeholders
+    (Codex reads files itself in interactive mode; focus is supplied below)
+
+See repository THIRD_PARTY_NOTICES.md for the upstream NOTICE.
+
 Use: 質問の冒頭に prepend する。PR レビュー目的のときだけ使う。
 -->
 
