@@ -9,7 +9,8 @@ The following notices are required by the upstream licenses.
 
 - Upstream: https://github.com/openai/codex-plugin-cc
 - License: Apache License, Version 2.0
-- License text: https://www.apache.org/licenses/LICENSE-2.0
+- License text (committed copy): [`LICENSES/Apache-2.0.txt`](./LICENSES/Apache-2.0.txt)
+- License URL: https://www.apache.org/licenses/LICENSE-2.0
 
 NOTICE (preserved from upstream):
 
