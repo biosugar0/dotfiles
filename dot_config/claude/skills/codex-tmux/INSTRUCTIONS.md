@@ -45,9 +45,20 @@ PARENT_WIN=$(tmux display-message -p -t "$TMUX_PANE" '#{session_id}:#{window_id}
 # 注: STATE_FILE は呼び出し元 pane (= $TMUX_PANE) ごとに分離する。単一ファイルだと
 # 複数 codex-tmux セッション並走時に last-writer-wins で別 pane の state を読み取り、
 # 追加質問が他 codex pane に paste されてしまう事故が起きる。
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/codex-tmux"
 PANE_KEY=$(printf '%s' "$TMUX_PANE" | tr -c 'A-Za-z0-9' '_')
-STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/codex-tmux/state-${PANE_KEY}.env"
-mkdir -p "$(dirname "$STATE_FILE")"
+STATE_FILE="$STATE_DIR/state-${PANE_KEY}.env"
+mkdir -p "$STATE_DIR"
+
+# stale state file の掃除（7日超のみ）
+# 注1: STATE_DIR は上で必ず HOME 配下に fallback 済み。XDG_STATE_HOME 未設定で
+#      `/codex-tmux` を触る事故を防ぐため、ここでも -n / -d でガードする。
+# 注2: -mtime +7 は、24h+ 生きている長時間 pane の state を誤って消さないため。
+#      短期 cleanup が欲しい場合でも +1 まで下げない（state-missing 事故になる）。
+# 注3: pane 自体は kill しない。人が読んでいる Codex pane を消すのは不可逆で危険。
+#      hook を増やすより、Step 0 で skill 単体に cleanup を閉じる方が依存が少ない。
+[ -n "$STATE_DIR" ] && [ -d "$STATE_DIR" ] \
+  && find "$STATE_DIR" -type f -name 'state-*.env' -mtime +7 -delete 2>/dev/null || true
 
 # 位置出力（debug / 事故時の追跡効率化）
 echo "[codex-tmux] self: $(tmux display-message -p -t "$TMUX_PANE" 'session=#{session_name} window=#{window_index}:#{window_name} pane=#{pane_index} (#{pane_id})')"
@@ -60,8 +71,19 @@ echo "[codex-tmux] STATE_FILE=$STATE_FILE"
 **重要: 先にzsh paneを作成し、send-keysでcodexを起動する。**
 split-windowに直接コマンドを渡すと、引用符のネストやプロンプト内の特殊文字でシェル展開が壊れ、paneが即座に閉じる。
 
+**PR レビュー目的の場合のみ**: skill 同梱の adversarial-review テンプレート
+（`~/.config/claude/skills/codex-tmux/templates/adversarial-review.md`）を
+プロンプト先頭に prepend する。skeptic 視点・attack surface・finding bar が
+固定化され、レビュー出力の質が安定する。
+通常のセカンドオピニオンや設計相談には使わない（議論を硬直させるため）。
+
 ```bash
 # プロンプトをファイルに書き出し
+# PR レビュー時は冒頭に adversarial テンプレを差し込む:
+#   cat ~/.config/claude/skills/codex-tmux/templates/adversarial-review.md > /tmp/codex-prompt.txt
+#   cat >> /tmp/codex-prompt.txt << 'PROMPT'
+#   ...レビュー対象とフォーカス...
+#   PROMPT
 cat > /tmp/codex-prompt.txt << 'PROMPT'
 （ここに質問を書く）
 PROMPT
