@@ -5,3 +5,4 @@
 - git add はファイルごとに
 - ai/ディレクトリはコミットしない
 - PRレビューでのGitHubへのコメントは不要
+- escape hatch は避けること
