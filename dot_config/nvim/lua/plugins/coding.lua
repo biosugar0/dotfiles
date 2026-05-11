@@ -99,22 +99,8 @@ return {
         vim.diagnostic.open_float(nil, { focusable = false, border = 'rounded' })
       end, { noremap = true, silent = true })
 
-      -- LSPハンドラーの設定（ボーダー付き）
-      local border = {
-        { '╭', 'FloatBorder' },
-        { '─', 'FloatBorder' },
-        { '╮', 'FloatBorder' },
-        { '│', 'FloatBorder' },
-        { '╯', 'FloatBorder' },
-        { '─', 'FloatBorder' },
-        { '╰', 'FloatBorder' },
-        { '│', 'FloatBorder' },
-      }
-
-      local handlers = {
-        ['textDocument/hover'] = vim.lsp.with(vim.lsp.handlers.hover, { border = border }),
-        ['textDocument/signatureHelp'] = vim.lsp.with(vim.lsp.handlers.signature_help, { border = border }),
-      }
+      -- LSP/補完を含む全フロートウィンドウのボーダー (Neovim 0.11+)
+      vim.o.winborder = 'rounded'
 
       -- 共通のon_attach関数
       -- Neovim 0.11+ のデフォルトキーマップ:
@@ -281,7 +267,6 @@ return {
       for name, config in pairs(servers) do
         config.on_attach = on_attach
         config.capabilities = capabilities
-        config.handlers = handlers
         vim.lsp.config(name, config)
         vim.lsp.enable(name)
       end
