@@ -2,7 +2,11 @@
 # Claude Code Notification hook → WezTerm OSC 777 (notify) toast.
 # stdin の hook payload JSON から notification_type / message / cwd を抽出。
 # 引数で title / body を指定すれば stdin を無視して上書き。
-# tmux 内なら DCS passthrough でラップ。
+#
+# 出力経路:
+#   - hook context (stdin=pipe + jq あり): JSON `{terminalSequence}` を返し
+#     Claude Code 2.1.141+ に代理出力させる (TTY なし環境でも届く + tmux DCS は本体側で wrap)。
+#   - 手動実行 / jq 不在: 従来通り /dev/tty へ直書き。tmux 内は DCS passthrough。
 set -u
 
 sanitize() {
@@ -54,6 +58,16 @@ fi
 title=$(sanitize "$title")
 body=$(sanitize "$body")
 
+# Hook channel (2.1.141+): JSON で返すと Claude Code が OSC を代理出力する。
+# 受理されるのは生 OSC のみ (DCS で wrap すると allowlist で弾かれる)。
+# tmux 内かどうかは Claude Code 側で検出して DCS passthrough まで行ってくれる。
+if [ ! -t 0 ] && command -v jq >/dev/null 2>&1; then
+  osc=$(printf '\033]777;notify;%s;%s\033\\' "$title" "$body")
+  jq -n --arg seq "$osc" '{terminalSequence: $seq}'
+  exit 0
+fi
+
+# Fallback: 手動実行 / jq 不在 → /dev/tty 直書き。
 [ -w /dev/tty ] || exit 0
 
 if [ -n "${TMUX:-}" ]; then
