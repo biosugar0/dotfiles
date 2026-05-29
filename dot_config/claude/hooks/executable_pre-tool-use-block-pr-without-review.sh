@@ -1,6 +1,8 @@
 #!/bin/bash
 # PreToolUse hook: Block gh pr create without codex review
 # マーカー形式: /tmp/.codex-review-done--{repo}--{branch}--{hash}
+# branch 内の "/" は "_" に置換する（slash 入りブランチ名でパスが破綻するため）。
+# codex-tmux skill Step 5 のマーカー生成と同じ置換規則を保つこと。
 
 input=$(cat)
 
@@ -17,7 +19,7 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
       r=$(git -C "$p" remote get-url origin 2>/dev/null | sed 's/\.git$//;s|.*/||')
       b=$(git -C "$p" branch --show-current 2>/dev/null)
       h=$(git -C "$p" rev-parse --short HEAD 2>/dev/null)
-      if [ -f "/tmp/.codex-review-done--${r}--${b}--${h}" ]; then
+      if [ -f "/tmp/.codex-review-done--${r}--${b//\//_}--${h}" ]; then
         found=true
         break
       fi
@@ -29,7 +31,7 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
     r=$(git -C "$hook_cwd" remote get-url origin 2>/dev/null | sed 's/\.git$//;s|.*/||')
     b=$(git -C "$hook_cwd" branch --show-current 2>/dev/null)
     h=$(git -C "$hook_cwd" rev-parse --short HEAD 2>/dev/null)
-    if [ -f "/tmp/.codex-review-done--${r}--${b}--${h}" ]; then
+    if [ -f "/tmp/.codex-review-done--${r}--${b//\//_}--${h}" ]; then
       found=true
     fi
   fi
@@ -41,7 +43,7 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
     cli_head=$(echo "$command" | grep -oE -- '--head[= ]+[^ ]+' | sed 's/--head[= ]*//')
     if [ -n "$cli_repo" ] && [ -n "$cli_head" ]; then
       # repo + branch で厳密マッチ（hash のみワイルドカード）
-      for marker in /tmp/.codex-review-done--"${cli_repo}"--"${cli_head}"--*; do
+      for marker in /tmp/.codex-review-done--"${cli_repo}"--"${cli_head//\//_}"--*; do
         if [ -f "$marker" ]; then
           found=true
           break
