@@ -211,6 +211,8 @@ function outputHookResult(context: string): void {
     hookSpecificOutput: {
       hookEventName: "SessionStart",
       additionalContext: context,
+      // skill 編集を再起動なしで同セッションへ反映（Claude Code v2.1.152+）
+      reloadSkills: true,
     },
   };
   console.log(JSON.stringify(result));
