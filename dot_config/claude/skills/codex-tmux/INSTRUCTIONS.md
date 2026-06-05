@@ -263,6 +263,33 @@ tmux kill-pane -t "$CODEX_PANE"
 rm -f /tmp/codex-prompt.txt "${XDG_STATE_HOME:-$HOME/.local/state}/codex-tmux/state-${PANE_KEY}.env"
 ```
 
+## フォールバック: codex が使えない場合
+
+以下のいずれかで codex との対話が成立しない場合、**PR レビューは `/code-review xhigh` に切り替える**。
+codex の復旧を待たず、検知した時点で自動でフォールバックすること。
+
+- tmux 外で動作（`$TMUX` 未設定）、または `codex` / `cage` コマンドが無い
+- Step 0 の pre-flight guard / Step 1 の split・codex 起動が失敗する
+- codex 側の rate limit・認証エラー・応答タイムアウト（Step 2 の完了検知が一定時間進まない）
+- ユーザーが明示的に code-review でのレビューを指示
+
+### 手順
+
+1. `/code-review xhigh` を実行し、指摘に対応する（対応方針が立つ／指摘ゼロに収束するまで）。
+2. レビュー完了後、code-review 用の完了マーカーを生成する。
+   block-pr-without-review hook はこのマーカーも codex マーカーと同等に PR ゲート通過として認める。
+
+```bash
+_repo=$(git remote get-url origin 2>/dev/null | sed 's/\.git$//;s|.*/||')
+_branch=$(git branch --show-current 2>/dev/null)
+_hash=$(git rev-parse --short HEAD 2>/dev/null)
+# branch 内の "/" → "_" 置換は codex 版マーカー（Step 5）/ hook 側と同じ規則を保つこと。
+touch "/tmp/.code-review-done--${_repo}--${_branch//\//_}--${_hash}"
+```
+
+注: マーカーは `.codex-review-done` ではなく `.code-review-done` を使う（レビュー経路を証跡で区別するため）。
+PR の HEAD が変わったら、新しい hash で再度マーカーを生成すること。
+
 ## 注意事項
 
 - 質問は単目的にする（1つの質問に1つのテーマ）

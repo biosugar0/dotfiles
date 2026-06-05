@@ -29,6 +29,11 @@ codex MCPは使わない。必ず最初にtmux paneを作成してからcodexと
 議論は複数ターンを基本とし、質問は単目的にする。
 codexは自分でファイルを読めるので内容全体を渡す必要はない。
 
+codexが使えない場合（tmux/codex/cage不在、起動失敗、codex側のrate limit・認証エラー・応答タイムアウト）は、
+PRレビューを `/code-review xhigh` に自動フォールバックする。
+レビュー後に `.code-review-done--{repo}--{branch}--{hash}` マーカーを生成すればPRゲートを通過できる
+（手順は codex-tmux skill のフォールバック節）。
+
 ## ブランチ作成前
 
 worktree or ブランチ作成前に `git fetch origin main` でリモートを取得し、`origin/main` ベースで作成する。

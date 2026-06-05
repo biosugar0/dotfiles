@@ -8,6 +8,26 @@ input=$(cat)
 
 command=$(echo "$input" | jq -r '.tool_input.command // empty')
 
+# review マーカーの存在チェック（codex review / code-review フォールバックの両方を許可）
+# codex が使えない場合は codex-tmux skill の代わりに /code-review xhigh でレビューし、
+# .code-review-done--* マーカーを生成する運用。両マーカーを PR ゲート通過として同等に扱う。
+# branch 内の "/" → "_" 置換規則はマーカー生成側（codex-tmux Step 5 / フォールバック節）と揃える。
+review_marker_exists() {
+  local r="$1" b="${2//\//_}" h="$3"
+  [ -f "/tmp/.codex-review-done--${r}--${b}--${h}" ] && return 0
+  [ -f "/tmp/.code-review-done--${r}--${b}--${h}" ] && return 0
+  return 1
+}
+
+# hash をワイルドカードにした glob 版（--repo + --head 経由のチェック用）
+review_marker_glob() {
+  local r="$1" b="${2//\//_}" m
+  for m in /tmp/.codex-review-done--"${r}"--"${b}"--* /tmp/.code-review-done--"${r}"--"${b}"--*; do
+    [ -f "$m" ] && return 0
+  done
+  return 1
+}
+
 # gh pr create をチェック（cd && gh pr create 等のパターンも検出）
 if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
   hook_cwd=$(echo "$input" | jq -r '.cwd')
@@ -19,7 +39,7 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
       r=$(git -C "$p" remote get-url origin 2>/dev/null | sed 's/\.git$//;s|.*/||')
       b=$(git -C "$p" branch --show-current 2>/dev/null)
       h=$(git -C "$p" rev-parse --short HEAD 2>/dev/null)
-      if [ -f "/tmp/.codex-review-done--${r}--${b//\//_}--${h}" ]; then
+      if review_marker_exists "$r" "$b" "$h"; then
         found=true
         break
       fi
@@ -31,7 +51,7 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
     r=$(git -C "$hook_cwd" remote get-url origin 2>/dev/null | sed 's/\.git$//;s|.*/||')
     b=$(git -C "$hook_cwd" branch --show-current 2>/dev/null)
     h=$(git -C "$hook_cwd" rev-parse --short HEAD 2>/dev/null)
-    if [ -f "/tmp/.codex-review-done--${r}--${b//\//_}--${h}" ]; then
+    if review_marker_exists "$r" "$b" "$h"; then
       found=true
     fi
   fi
@@ -43,12 +63,9 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
     cli_head=$(echo "$command" | grep -oE -- '--head[= ]+[^ ]+' | sed 's/--head[= ]*//')
     if [ -n "$cli_repo" ] && [ -n "$cli_head" ]; then
       # repo + branch で厳密マッチ（hash のみワイルドカード）
-      for marker in /tmp/.codex-review-done--"${cli_repo}"--"${cli_head//\//_}"--*; do
-        if [ -f "$marker" ]; then
-          found=true
-          break
-        fi
-      done
+      if review_marker_glob "$cli_repo" "$cli_head"; then
+        found=true
+      fi
     fi
     # --head なし & --repo のみ → deny（安全側に倒す）
   fi
@@ -85,7 +102,7 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
     if [ -n "$cli_repo_check" ] && [ -z "$cli_head_check" ]; then
       reason="Codex reviewが未実施、または --head フラグが不足。--head {branch} を付けて再試行すること。"
     else
-      reason="Codex reviewが未実施。先にcodex-tmux skillでレビューを受けてからPRを作成すること。"
+      reason="Codex reviewが未実施。先にcodex-tmux skillでレビューを受けてからPRを作成すること。codex が使えない場合は /code-review xhigh でレビューし、.code-review-done--{repo}--{branch}--{hash} マーカーを生成すること（詳細は codex-tmux skill のフォールバック節）。"
     fi
     jq -n --arg reason "$reason" '{
       hookSpecificOutput: {
