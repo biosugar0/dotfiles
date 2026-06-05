@@ -5,3 +5,8 @@
 .zcompdump*
 dot_config/zsh/.zsh_history
 dot_config/zsh/dot_zcompdump*
+
+# Claude Code 作業の副産物（機密混入・再生成可能のため除外）
+.playwright-cli/
+.claude-sessions/
+.claude/scheduled_tasks.lock
