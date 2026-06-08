@@ -4,6 +4,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "model": "opus[1m]",
+  "fallbackModel": ["claude-opus-4-7[1m]", "claude-opus-4-6[1m]"],
   "outputStyle": "default",
   "effortLevel": "xhigh",
   "env": {
@@ -377,7 +378,8 @@
     "gopls-lsp@claude-plugins-official": true,
     "pyright-lsp@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true,
-    "obsidian@obsidian-skills": true
+    "obsidian@obsidian-skills": true,
+    "duckdb-skills@duckdb-skills": true
 {{- range $privatePlugins }},
     "{{ . }}@{{ $privateName }}": true
 {{- end }}
@@ -393,6 +395,12 @@
       "source": {
         "source": "github",
         "repo": "kepano/obsidian-skills"
+      }
+    },
+    "duckdb-skills": {
+      "source": {
+        "source": "github",
+        "repo": "duckdb/duckdb-skills"
       }
     }
 {{- if $privateRepo }},

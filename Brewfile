@@ -40,6 +40,7 @@ brew "poetry"
 
 # Database
 brew "postgresql@16"
+brew "duckdb"
 
 # Development tools
 brew "aqua"
