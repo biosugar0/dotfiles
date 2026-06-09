@@ -2,6 +2,7 @@
 
 import Anthropic from "npm:@anthropic-ai/sdk";
 import { readAll } from "jsr:@std/io@0.224/read-all";
+import { resolveAnthropicAuth } from "./lib/session-context.ts";
 
 interface StopHookInput {
   stop_hook_active?: boolean;
@@ -111,44 +112,6 @@ async function getLastUserRequest(
   return null;
 }
 
-async function getTokenFromKeychain(): Promise<string | null> {
-  try {
-    const dumpCmd = new Deno.Command("security", {
-      args: ["dump-keychain"],
-      stdout: "piped",
-      stderr: "null",
-    });
-    const dumpOutput = await dumpCmd.output();
-    const text = new TextDecoder().decode(dumpOutput.stdout);
-    const services: string[] = [];
-    for (const m of text.matchAll(/"svce"<blob>="(Claude Code-credentials[^"]*)"/g)) {
-      if (!services.includes(m[1])) services.push(m[1]);
-    }
-    for (const svc of services) {
-      try {
-        const cmd = new Deno.Command("security", {
-          args: ["find-generic-password", "-s", svc, "-w"],
-          stdout: "piped",
-          stderr: "null",
-        });
-        const output = await cmd.output();
-        if (!output.success) continue;
-        const raw = new TextDecoder().decode(output.stdout).trim();
-        const creds = JSON.parse(raw);
-        const oauth = creds?.claudeAiOauth;
-        if (!oauth?.accessToken) continue;
-        if (oauth.expiresAt && oauth.expiresAt < Date.now()) continue;
-        return oauth.accessToken;
-      } catch {
-        continue;
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
 async function main(): Promise<void> {
   try {
     const raw = new TextDecoder().decode(await readAll(Deno.stdin));
@@ -163,16 +126,14 @@ async function main(): Promise<void> {
       Deno.exit(0);
     }
 
-    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-    const sessionToken = Deno.env.get("CLAUDE_CODE_OAUTH_TOKEN");
-    const keychainToken = (!apiKey && !sessionToken) ? await getTokenFromKeychain() : null;
-    if (!apiKey && !sessionToken && !keychainToken) {
+    const auth = await resolveAnthropicAuth();
+    if (!auth) {
       Deno.exit(0);
     }
-    const client = apiKey
-      ? new Anthropic({ apiKey })
+    const client = auth.apiKey
+      ? new Anthropic({ apiKey: auth.apiKey })
       : new Anthropic({
-          authToken: sessionToken || keychainToken,
+          authToken: auth.authToken,
           apiKey: null,
           defaultHeaders: { "anthropic-beta": "oauth-2025-04-20" },
         });

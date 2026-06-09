@@ -177,6 +177,33 @@ export async function getTokenFromKeychain(): Promise<string | null> {
   }
 }
 
+export interface AnthropicAuth {
+  apiKey?: string;
+  authToken?: string;
+}
+
+/**
+ * Resolve Anthropic API auth for hooks.
+ *
+ * Claude Code strips auth tokens (ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN,
+ * CLAUDE_CODE_SESSION_ACCESS_TOKEN) from hook process environments, so inside a
+ * hook the keychain is the effective path. Env vars are still checked first to
+ * support non-hook / manual invocation.
+ *
+ * Returns null when no credential is available.
+ */
+export async function resolveAnthropicAuth(): Promise<AnthropicAuth | null> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (apiKey) return { apiKey };
+
+  const envToken = Deno.env.get("CLAUDE_CODE_OAUTH_TOKEN") ??
+    Deno.env.get("CLAUDE_CODE_SESSION_ACCESS_TOKEN");
+  const token = envToken ?? (await getTokenFromKeychain());
+  if (!token) return null;
+
+  return { authToken: token };
+}
+
 export async function getRecentUserMessages(
   transcriptPath: string,
   maxMessages = 5,

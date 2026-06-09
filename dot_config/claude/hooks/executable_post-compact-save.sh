@@ -61,15 +61,37 @@ fi
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // ""')
 RESUME_FILE="$STATE_DIR/compact_resume.json"
 
-# Haiku API 呼び出しに必要な認証を試みる
+# Haiku API 呼び出しに必要な認証を解決
+# 優先順位: ANTHROPIC_API_KEY (x-api-key) → env OAuth トークン (Bearer)
+#           → keychain OAuth トークン (Bearer)
+# hook プロセスでは env トークンが strip されるため、通常は keychain に落ちる。
+get_keychain_token() {
+    command -v security >/dev/null 2>&1 || return 1
+    local svc raw token expires now
+    svc=$(security dump-keychain 2>/dev/null | grep -oE 'Claude Code-credentials[^"]*' | head -1)
+    if [ -z "$svc" ]; then return 1; fi
+    raw=$(security find-generic-password -s "$svc" -w 2>/dev/null) || return 1
+    token=$(printf '%s' "$raw" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
+    if [ -z "$token" ]; then return 1; fi
+    expires=$(printf '%s' "$raw" | jq -r '.claudeAiOauth.expiresAt // 0' 2>/dev/null || echo 0)
+    now=$(( $(date +%s) * 1000 ))
+    if [ "$expires" != "0" ] && [ "$expires" -lt "$now" ]; then return 1; fi
+    printf '%s' "$token"
+}
+
 API_KEY="${ANTHROPIC_API_KEY:-}"
+OAUTH_TOKEN=""
 if [ -z "$API_KEY" ]; then
-    # keychain からトークン取得を試みる
-    SESSION_TOKEN="${CLAUDE_CODE_SESSION_ACCESS_TOKEN:-}"
-    if [ -z "$SESSION_TOKEN" ]; then
-        # keychain 経由は shell から複雑なので、compact_summary から機械的に抽出
-        if [ -n "$COMPACT_SUMMARY" ]; then
-            cat > "$RESUME_FILE" << RESUME
+    OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:-${CLAUDE_CODE_SESSION_ACCESS_TOKEN:-}}"
+    if [ -z "$OAUTH_TOKEN" ]; then
+        OAUTH_TOKEN=$(get_keychain_token || true)
+    fi
+fi
+
+# 認証が全く取れない場合は compact_summary から機械的に抽出して終了
+if [ -z "$API_KEY" ] && [ -z "$OAUTH_TOKEN" ]; then
+    if [ -n "$COMPACT_SUMMARY" ]; then
+        cat > "$RESUME_FILE" << RESUME
 {
   "schema_version": 1,
   "source": "mechanical",
@@ -78,16 +100,21 @@ if [ -z "$API_KEY" ]; then
   "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 RESUME
-            echo "PostCompact: compact_resume.json saved (mechanical extraction)" >&2
-        fi
-        exit 0
+        echo "PostCompact: compact_resume.json saved (mechanical extraction)" >&2
     fi
+    exit 0
 fi
 
-# API key がある場合は Haiku で構造化抽出
-if [ -n "$API_KEY" ] && [ -n "$COMPACT_SUMMARY" ]; then
+# Haiku で構造化抽出（API key は x-api-key、OAuth トークンは Bearer + beta ヘッダ）
+if [ -n "$COMPACT_SUMMARY" ]; then
+    if [ -n "$API_KEY" ]; then
+        auth_args=(-H "x-api-key: $API_KEY")
+    else
+        auth_args=(-H "authorization: Bearer $OAUTH_TOKEN" -H "anthropic-beta: oauth-2025-04-20")
+    fi
+
     HAIKU_RESPONSE=$(curl -s --max-time 15 https://api.anthropic.com/v1/messages \
-        -H "x-api-key: $API_KEY" \
+        "${auth_args[@]}" \
         -H "anthropic-version: 2023-06-01" \
         -H "content-type: application/json" \
         -d "$(jq -n \

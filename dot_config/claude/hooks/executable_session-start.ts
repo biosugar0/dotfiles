@@ -11,7 +11,7 @@ import Anthropic from "npm:@anthropic-ai/sdk";
 import { readAll } from "jsr:@std/io@0.224/read-all";
 import {
   getGitBranch,
-  getTokenFromKeychain,
+  resolveAnthropicAuth,
 } from "./lib/session-context.ts";
 
 interface SessionStartInput {
@@ -294,17 +294,13 @@ function formatSupplement(data: CompactSupplementInput): string {
 }
 
 async function getApiClient(): Promise<Anthropic | null> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  const sessionToken = Deno.env.get("CLAUDE_CODE_SESSION_ACCESS_TOKEN");
-  const keychainToken =
-    !apiKey && !sessionToken ? await getTokenFromKeychain() : null;
+  const auth = await resolveAnthropicAuth();
+  if (!auth) return null;
 
-  if (!apiKey && !sessionToken && !keychainToken) return null;
-
-  return apiKey
-    ? new Anthropic({ apiKey })
+  return auth.apiKey
+    ? new Anthropic({ apiKey: auth.apiKey })
     : new Anthropic({
-        authToken: sessionToken || keychainToken,
+        authToken: auth.authToken,
         apiKey: null,
         defaultHeaders: { "anthropic-beta": "oauth-2025-04-20" },
       });
