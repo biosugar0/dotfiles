@@ -8,7 +8,7 @@ command=$(echo "$input" | jq -r '.tool_input.command // empty')
 [ -z "$command" ] && exit 0
 
 # git add/commit 以外はスルー
-echo "$command" | grep -qE '^git (add|commit)' || exit 0
+echo "$command" | grep -qE '(^|[;&|] *)git (add|commit)' || exit 0
 
 # 明示的な禁止パスを検出
 if echo "$command" | grep -qE '(^|\s)(ai/)'; then
