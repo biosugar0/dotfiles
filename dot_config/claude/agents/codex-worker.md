@@ -1,6 +1,6 @@
 ---
 name: codex-worker
-description: Codex (gpt-5) に作業を委譲して実行する汎用worker。調査・コードレビュー・実装・web検索など疎結合なタスクの委譲先。Use proactively for delegatable research, review, implementation, and web-search tasks.
+description: general-purpose を振り替えて Codex (gpt-5) に委譲する実行先。1回の codex exec で完結する調査・レビュー・実装・単発 web 検索向き。PreToolUse hook が自動でルーティングするため通常は直接選択せず general-purpose を使い、多数対象への並列ファンアウト探索は Explore を使うこと。
 tools: Bash
 model: haiku
 maxTurns: 15
