@@ -61,10 +61,10 @@ fi
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // ""')
 RESUME_FILE="$STATE_DIR/compact_resume.json"
 
-# Haiku API 呼び出しに必要な認証を解決
-# 優先順位: ANTHROPIC_API_KEY (x-api-key) → env OAuth トークン (Bearer)
-#           → keychain OAuth トークン (Bearer)
-# hook プロセスでは env トークンが strip されるため、通常は keychain に落ちる。
+# Haiku API 認証: keychain の OAuth トークンのみ。
+# claude ランチャ(dot_config/zsh/dot_zshrc)が CLAUDE_CODE_OAUTH_TOKEN を unset し、
+# ANTHROPIC_API_KEY も未使用のため、env 経由の認証トークンは hook に届かない。
+# (Claude Code はデフォルトでは cred を scrub しない: CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 が必要)
 
 # compact_summary から機械的に resume を生成（Haiku 不可・失敗・タイムアウト時の共通フォールバック）
 write_mechanical_resume() {
@@ -105,32 +105,20 @@ get_keychain_token() {
     return 1
 }
 
-API_KEY="${ANTHROPIC_API_KEY:-}"
-OAUTH_TOKEN=""
-if [ -z "$API_KEY" ]; then
-    OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:-${CLAUDE_CODE_SESSION_ACCESS_TOKEN:-}}"
-    if [ -z "$OAUTH_TOKEN" ]; then
-        OAUTH_TOKEN=$(get_keychain_token || true)
-    fi
-fi
+TOKEN=$(get_keychain_token || true)
 
-# 認証が全く取れない場合は機械抽出で終了
-if [ -z "$API_KEY" ] && [ -z "$OAUTH_TOKEN" ]; then
+# keychain トークンが取れない場合は機械抽出で終了
+if [ -z "$TOKEN" ]; then
     write_mechanical_resume
     exit 0
 fi
 
-# Haiku で構造化抽出（API key は x-api-key、OAuth トークンは Bearer + beta ヘッダ）
+# Haiku で構造化抽出（keychain OAuth トークンを Bearer + beta ヘッダで）。
 # curl の --max-time は PostCompact hook timeout(10s)未満に収め、超過/失敗時は機械抽出へ。
 if [ -n "$COMPACT_SUMMARY" ]; then
-    if [ -n "$API_KEY" ]; then
-        auth_args=(-H "x-api-key: $API_KEY")
-    else
-        auth_args=(-H "authorization: Bearer $OAUTH_TOKEN" -H "anthropic-beta: oauth-2025-04-20")
-    fi
-
     HAIKU_RESPONSE=$(curl -s --max-time 8 https://api.anthropic.com/v1/messages \
-        "${auth_args[@]}" \
+        -H "authorization: Bearer $TOKEN" \
+        -H "anthropic-beta: oauth-2025-04-20" \
         -H "anthropic-version: 2023-06-01" \
         -H "content-type: application/json" \
         -d "$(jq -n \

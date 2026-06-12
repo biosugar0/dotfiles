@@ -297,13 +297,11 @@ async function getApiClient(): Promise<Anthropic | null> {
   const auth = await resolveAnthropicAuth();
   if (!auth) return null;
 
-  return auth.apiKey
-    ? new Anthropic({ apiKey: auth.apiKey })
-    : new Anthropic({
-        authToken: auth.authToken,
-        apiKey: null,
-        defaultHeaders: { "anthropic-beta": "oauth-2025-04-20" },
-      });
+  return new Anthropic({
+    authToken: auth.authToken,
+    apiKey: null,
+    defaultHeaders: { "anthropic-beta": "oauth-2025-04-20" },
+  });
 }
 
 async function handleCompact(
@@ -328,7 +326,7 @@ async function handleCompact(
     if (!client) {
       await Deno.stderr.write(
         new TextEncoder().encode(
-          "SessionStart(compact): No API credentials found (no ANTHROPIC_API_KEY, no session token, no keychain token)\n",
+          "SessionStart(compact): No keychain OAuth token found — skipping Haiku supplement\n",
         ),
       );
       if (compactSummary) return; // compact_summary exists, no supplement needed

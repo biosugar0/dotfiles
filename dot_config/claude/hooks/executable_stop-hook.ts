@@ -130,13 +130,11 @@ async function main(): Promise<void> {
     if (!auth) {
       Deno.exit(0);
     }
-    const client = auth.apiKey
-      ? new Anthropic({ apiKey: auth.apiKey })
-      : new Anthropic({
-          authToken: auth.authToken,
-          apiKey: null,
-          defaultHeaders: { "anthropic-beta": "oauth-2025-04-20" },
-        });
+    const client = new Anthropic({
+      authToken: auth.authToken,
+      apiKey: null,
+      defaultHeaders: { "anthropic-beta": "oauth-2025-04-20" },
+    });
 
     // Extract user's recent request from transcript
     let userContext = "";
