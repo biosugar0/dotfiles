@@ -156,6 +156,9 @@
       "Read(.dev.vars.*)",
       "Write(.env*)",
       "Write(**/secrets/**)"
+{{- range (dig "private_marketplace" "disabled_skills" (list) .) }},
+      "Skill({{ . }})"
+{{- end }}
     ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
@@ -221,6 +224,16 @@
           {
             "type": "command",
             "command": "$HOME/.config/claude/hooks/pre-tool-use-block-config-edit.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/pre-tool-use-route-subagent-to-codex.sh",
             "timeout": 5
           }
         ]
@@ -416,5 +429,7 @@
   "alwaysThinkingEnabled": true,
   "skipDangerousModePermissionPrompt": true,
   "remoteControlEnabled": true,
+  "agentPushNotifEnabled": true,
+  "inputNeededNotifEnabled": true,
   "autoMemoryEnabled": false
 }

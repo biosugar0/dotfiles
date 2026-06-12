@@ -18,7 +18,6 @@ todos/
 
 # MCP/Tool state
 .serena/
-agents/
 chrome/
 extensions/
 ide/

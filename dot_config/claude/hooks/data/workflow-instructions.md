@@ -29,6 +29,11 @@ codex MCPは使わない。必ず最初にtmux paneを作成してからcodexと
 議論は複数ターンを基本とし、質問は単目的にする。
 codexは自分でファイルを読めるので内容全体を渡す必要はない。
 
+subagentタスク（general-purpose）はPreToolUse hookが自動的に codex-worker（codex execで実行）に振り替える。
+Explore/Plan/ci-quality-checker等の専門agentは対象外。
+codex-workerが失敗した場合（rate limit等）は、prompt冒頭に `[no-codex]` を付けて再委譲すると
+hookが素通しになりClaude general-purposeで実行される。
+
 codexが使えない場合（tmux/codex/cage不在、起動失敗、codex側のrate limit・認証エラー・応答タイムアウト）は、
 PRレビューを `/code-review xhigh` に自動フォールバックする。
 レビュー後に `.code-review-done--{repo}--{branch}--{hash}` マーカーを生成すればPRゲートを通過できる
