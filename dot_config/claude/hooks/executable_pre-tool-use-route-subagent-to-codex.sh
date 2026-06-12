@@ -5,27 +5,30 @@
 
 input=$(cat)
 
+# 安価なチェックを先に（routing off / codex 不在なら jq を起動せず抜ける）
+[ "${CODEX_SUBAGENT_ROUTING:-on}" = "off" ] && exit 0
+command -v codex >/dev/null 2>&1 || exit 0
+
+# tool_name・subagent_type・[no-codex]判定 を 1回の jq にまとめる（旧: 抽出ごとに jq を3回 fork）。
+# [no-codex] は先頭空白・改行を除いた上での前方一致を jq 内で判定する
+# （prompt の生の改行を bash に渡すと @tsv で \n にエスケープされ判定が壊れるため、bool だけ受け取る）。
+IFS=$'\t' read -r tool_name subagent_type is_nocodex < <(echo "$input" | jq -r '
+  [ (.tool_name // ""),
+    (.tool_input.subagent_type // "general-purpose"),
+    (if ((.tool_input.prompt // "") | sub("^\\s+"; "") | startswith("[no-codex]")) then "1" else "0" end)
+  ] | @tsv')
+
 # Task(旧称)/Agent(v2.1.63+) 以外は対象外
-tool_name=$(echo "$input" | jq -r '.tool_name // empty')
 case "$tool_name" in
   Task|Agent) ;;
   *) exit 0 ;;
 esac
 
-[ "${CODEX_SUBAGENT_ROUTING:-on}" = "off" ] && exit 0
-command -v codex >/dev/null 2>&1 || exit 0
-
 # general-purpose（未指定含む）のみ振り替え。専門agentはそのまま通す
-subagent_type=$(echo "$input" | jq -r '.tool_input.subagent_type // "general-purpose"')
 [ "$subagent_type" = "general-purpose" ] || exit 0
 
-# [no-codex] マーカーはフォールバック経路（codex失敗後の再委譲用）として素通し。
-# 先頭の空白・改行を除去してから判定（main agent が改行付きで再委譲してもフォールバックを取りこぼさない）
-prompt=$(echo "$input" | jq -r '.tool_input.prompt // empty')
-prompt_trimmed="${prompt#"${prompt%%[![:space:]]*}"}"
-case "$prompt_trimmed" in
-  "[no-codex]"*) exit 0 ;;
-esac
+# [no-codex] マーカーはフォールバック経路（codex失敗後の再委譲用）として素通し
+[ "$is_nocodex" = "1" ] && exit 0
 
 echo "$input" | jq '{
   hookSpecificOutput: {
