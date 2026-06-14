@@ -131,8 +131,8 @@ async function findKeychainServices(): Promise<string[]> {
 }
 
 async function getTokenFromKeychain(): Promise<string | null> {
-  const envToken = Deno.env.get("CLAUDE_CODE_OAUTH_TOKEN");
-  if (envToken) return envToken;
+  // claude ランチャが CLAUDE_CODE_OAUTH_TOKEN を unset するため env トークンは
+  // hook/statusline に届かず、keychain の OAuth トークンが唯一の認証経路（env 検査は廃止）。
   try {
     for (const svc of await findKeychainServices()) {
       try {

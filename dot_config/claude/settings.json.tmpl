@@ -298,15 +298,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat ~/.config/claude/hooks/data/golden-rules.txt 2>/dev/null || true; echo ''; (git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --is-inside-work-tree >/dev/null 2>&1 && git -C \"$CLAUDE_PROJECT_DIR\" status --short) || true; echo '\n---\nCurrent time: '$(date '+%Y-%m-%d %H:%M:%S')",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "$HOME/.config/claude/hooks/userpromptsubmit-context.sh",
             "timeout": 5
           }

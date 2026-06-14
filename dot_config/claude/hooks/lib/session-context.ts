@@ -177,6 +177,27 @@ export async function getTokenFromKeychain(): Promise<string | null> {
   }
 }
 
+export interface AnthropicAuth {
+  authToken: string;
+}
+
+/**
+ * Resolve Anthropic API auth for hooks.
+ *
+ * In this setup the keychain OAuth token (claude.ai login) is the only usable
+ * credential for hooks: the `claude` launcher unsets CLAUDE_CODE_OAUTH_TOKEN
+ * (see dot_config/zsh/dot_zshrc) and ANTHROPIC_API_KEY is not used, so env auth
+ * tokens never reach hook subprocesses. (Claude Code does NOT scrub credentials
+ * by default — that requires CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1.) Returns a
+ * Bearer authToken, or null when the keychain has no valid token — callers
+ * degrade gracefully.
+ */
+export async function resolveAnthropicAuth(): Promise<AnthropicAuth | null> {
+  const token = await getTokenFromKeychain();
+  if (!token) return null;
+  return { authToken: token };
+}
+
 export async function getRecentUserMessages(
   transcriptPath: string,
   maxMessages = 5,

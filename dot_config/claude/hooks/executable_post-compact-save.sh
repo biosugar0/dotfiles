@@ -61,15 +61,15 @@ fi
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // ""')
 RESUME_FILE="$STATE_DIR/compact_resume.json"
 
-# Haiku API 呼び出しに必要な認証を試みる
-API_KEY="${ANTHROPIC_API_KEY:-}"
-if [ -z "$API_KEY" ]; then
-    # keychain からトークン取得を試みる
-    SESSION_TOKEN="${CLAUDE_CODE_SESSION_ACCESS_TOKEN:-}"
-    if [ -z "$SESSION_TOKEN" ]; then
-        # keychain 経由は shell から複雑なので、compact_summary から機械的に抽出
-        if [ -n "$COMPACT_SUMMARY" ]; then
-            cat > "$RESUME_FILE" << RESUME
+# Haiku API 認証: keychain の OAuth トークンのみ。
+# claude ランチャ(dot_config/zsh/dot_zshrc)が CLAUDE_CODE_OAUTH_TOKEN を unset し、
+# ANTHROPIC_API_KEY も未使用のため、env 経由の認証トークンは hook に届かない。
+# (Claude Code はデフォルトでは cred を scrub しない: CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 が必要)
+
+# compact_summary から機械的に resume を生成（Haiku 不可・失敗・タイムアウト時の共通フォールバック）
+write_mechanical_resume() {
+    [ -n "$COMPACT_SUMMARY" ] || return 0
+    cat > "$RESUME_FILE" << RESUME
 {
   "schema_version": 1,
   "source": "mechanical",
@@ -78,16 +78,47 @@ if [ -z "$API_KEY" ]; then
   "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 RESUME
-            echo "PostCompact: compact_resume.json saved (mechanical extraction)" >&2
-        fi
-        exit 0
-    fi
+    echo "PostCompact: compact_resume.json saved (mechanical extraction)" >&2
+}
+
+# macOS keychain から有効な Claude Code OAuth トークンを取得
+# lib/session-context.ts と同様に全 service を走査し、取得失敗・期限切れは skip して次を試す。
+get_keychain_token() {
+    command -v security >/dev/null 2>&1 || return 1
+    local services svc raw token expires now
+    services=$(security dump-keychain 2>/dev/null \
+        | grep -oE '"svce"<blob>="Claude Code-credentials[^"]*"' \
+        | sed -E 's/^"svce"<blob>="(.*)"$/\1/' \
+        | awk '!seen[$0]++')
+    if [ -z "$services" ]; then return 1; fi
+    now=$(( $(date +%s) * 1000 ))
+    while IFS= read -r svc; do
+        [ -n "$svc" ] || continue
+        raw=$(security find-generic-password -s "$svc" -w 2>/dev/null) || continue
+        token=$(printf '%s' "$raw" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null) || continue
+        [ -n "$token" ] || continue
+        expires=$(printf '%s' "$raw" | jq -r '.claudeAiOauth.expiresAt // 0' 2>/dev/null || echo 0)
+        if [ "$expires" != "0" ] && [ "$expires" -lt "$now" ]; then continue; fi
+        printf '%s' "$token"
+        return 0
+    done <<< "$services"
+    return 1
+}
+
+TOKEN=$(get_keychain_token || true)
+
+# keychain トークンが取れない場合は機械抽出で終了
+if [ -z "$TOKEN" ]; then
+    write_mechanical_resume
+    exit 0
 fi
 
-# API key がある場合は Haiku で構造化抽出
-if [ -n "$API_KEY" ] && [ -n "$COMPACT_SUMMARY" ]; then
-    HAIKU_RESPONSE=$(curl -s --max-time 15 https://api.anthropic.com/v1/messages \
-        -H "x-api-key: $API_KEY" \
+# Haiku で構造化抽出（keychain OAuth トークンを Bearer + beta ヘッダで）。
+# curl の --max-time は PostCompact hook timeout(10s)未満に収め、超過/失敗時は機械抽出へ。
+if [ -n "$COMPACT_SUMMARY" ]; then
+    HAIKU_RESPONSE=$(curl -s --max-time 8 https://api.anthropic.com/v1/messages \
+        -H "authorization: Bearer $TOKEN" \
+        -H "anthropic-beta: oauth-2025-04-20" \
         -H "anthropic-version: 2023-06-01" \
         -H "content-type: application/json" \
         -d "$(jq -n \
@@ -101,20 +132,26 @@ if [ -n "$API_KEY" ] && [ -n "$COMPACT_SUMMARY" ]; then
                 }]
             }')" 2>/dev/null || true)
 
+    RESUME_CONTENT=""
     if [ -n "$HAIKU_RESPONSE" ]; then
         RESUME_CONTENT=$(echo "$HAIKU_RESPONSE" | jq -r '.content[0].text // ""' 2>/dev/null || true)
-        if echo "$RESUME_CONTENT" | jq empty 2>/dev/null; then
-            # valid JSON
-            jq -n \
-                --arg src "haiku" \
-                --argjson count "$count" \
-                --argjson resume "$RESUME_CONTENT" \
-                '{schema_version: 1, source: $src, compact_count: $count, resume: $resume, created_at: (now | todate)}' \
-                > "$RESUME_FILE"
-            echo "PostCompact: compact_resume.json saved (haiku extraction)" >&2
-        else
-            # Haiku がプレーンテキストを返した場合
-            cat > "$RESUME_FILE" << RESUME
+    fi
+
+    if [ -z "$RESUME_CONTENT" ]; then
+        # curl 失敗 / 空応答 / content 欠落 → 機械抽出へフォールバック（resume 欠落を防ぐ）
+        write_mechanical_resume
+    elif echo "$RESUME_CONTENT" | jq empty 2>/dev/null; then
+        # valid JSON
+        jq -n \
+            --arg src "haiku" \
+            --argjson count "$count" \
+            --argjson resume "$RESUME_CONTENT" \
+            '{schema_version: 1, source: $src, compact_count: $count, resume: $resume, created_at: (now | todate)}' \
+            > "$RESUME_FILE"
+        echo "PostCompact: compact_resume.json saved (haiku extraction)" >&2
+    else
+        # Haiku がプレーンテキストを返した場合
+        cat > "$RESUME_FILE" << RESUME
 {
   "schema_version": 1,
   "source": "haiku_text",
@@ -123,8 +160,7 @@ if [ -n "$API_KEY" ] && [ -n "$COMPACT_SUMMARY" ]; then
   "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 RESUME
-            echo "PostCompact: compact_resume.json saved (haiku text fallback)" >&2
-        fi
+        echo "PostCompact: compact_resume.json saved (haiku text fallback)" >&2
     fi
 fi
 

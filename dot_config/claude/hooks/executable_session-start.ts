@@ -11,7 +11,7 @@ import Anthropic from "npm:@anthropic-ai/sdk";
 import { readAll } from "jsr:@std/io@0.224/read-all";
 import {
   getGitBranch,
-  getTokenFromKeychain,
+  resolveAnthropicAuth,
 } from "./lib/session-context.ts";
 
 interface SessionStartInput {
@@ -294,20 +294,14 @@ function formatSupplement(data: CompactSupplementInput): string {
 }
 
 async function getApiClient(): Promise<Anthropic | null> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  const sessionToken = Deno.env.get("CLAUDE_CODE_SESSION_ACCESS_TOKEN");
-  const keychainToken =
-    !apiKey && !sessionToken ? await getTokenFromKeychain() : null;
+  const auth = await resolveAnthropicAuth();
+  if (!auth) return null;
 
-  if (!apiKey && !sessionToken && !keychainToken) return null;
-
-  return apiKey
-    ? new Anthropic({ apiKey })
-    : new Anthropic({
-        authToken: sessionToken || keychainToken,
-        apiKey: null,
-        defaultHeaders: { "anthropic-beta": "oauth-2025-04-20" },
-      });
+  return new Anthropic({
+    authToken: auth.authToken,
+    apiKey: null,
+    defaultHeaders: { "anthropic-beta": "oauth-2025-04-20" },
+  });
 }
 
 async function handleCompact(
@@ -332,7 +326,7 @@ async function handleCompact(
     if (!client) {
       await Deno.stderr.write(
         new TextEncoder().encode(
-          "SessionStart(compact): No API credentials found (no ANTHROPIC_API_KEY, no session token, no keychain token)\n",
+          "SessionStart(compact): No keychain OAuth token found — skipping Haiku supplement\n",
         ),
       );
       if (compactSummary) return; // compact_summary exists, no supplement needed
