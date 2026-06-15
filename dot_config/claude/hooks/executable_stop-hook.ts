@@ -2,7 +2,11 @@
 
 import Anthropic from "npm:@anthropic-ai/sdk";
 import { readAll } from "jsr:@std/io@0.224/read-all";
-import { resolveAnthropicAuth } from "./lib/session-context.ts";
+import {
+  resolveAnthropicAuth,
+  isRealUserMessage,
+  extractTextFromContent,
+} from "./lib/session-context.ts";
 
 interface StopHookInput {
   stop_hook_active?: boolean;
@@ -21,6 +25,38 @@ interface TranscriptEntry {
   message?: {
     content: string | Array<{ type: string; text?: string }>;
   };
+}
+
+/**
+ * ユーザーの直近リクエストに「明示的な反復/ループ指示」があるか高精度に判定する。
+ * 検出時は stop-hook が「終了条件が満たされるまで継続を強制」する自動 goal 挙動に入る
+ * (手動 /goal なしでループ駆動する。ただし CC の連続 block 上限 8 回で頭打ち=長いループは /goal を使う)。
+ * 誤爆(=本当はループでない指示で延々 block)を避けるため、語のホワイトリストで絞る。
+ */
+const LOOP_PATTERNS: RegExp[] = [
+  /繰り返(して|す(?:$|[。、\s])|せ)/, // 命令形/節末のみ。名詞「繰り返しの/処理」は除外
+  /(なくなる|無くなる|出なくなる|ゼロになる|0になる|消える|通る|直る|収束(する)?|終わる|パスする|グリーンになる|green になる)まで(?![のに])/, // 「までの/までに」(説明文)は除外
+  /ループ(して|で回|させ|を回)/,
+  /\b(repeat|loop)\s+until\b/i,
+  /\bkeep\s+(going|iterating|repeating|running|trying|fixing)\b/i,
+  // until + (60字以内の)成功語: "until tests pass" 等を拾う
+  /\buntil\b[\s\S]{0,60}?\b(pass(?:es|ing)?|succeed|success|clean|resolved|done|green|gone|zero|no\s+(?:findings|errors|issues|failures))\b/i,
+];
+
+export function detectLoopDirective(text: string): boolean {
+  return !!text && LOOP_PATTERNS.some((re) => re.test(text));
+}
+
+/** マッチした反復ディレクティブ周辺を抜き出す(userContext が 500字で切られても終了条件を haiku に渡すため) */
+export function loopDirectiveSnippet(text: string): string {
+  for (const re of LOOP_PATTERNS) {
+    const m = text.match(re);
+    if (m && m.index !== undefined) {
+      const s = Math.max(0, m.index - 40);
+      return text.slice(s, m.index + m[0].length + 40).trim();
+    }
+  }
+  return "";
 }
 
 const STOP_DECISION_TOOL: Anthropic.Tool = {
@@ -69,39 +105,23 @@ When you APPROVE stop (should_stop=true), also set done_summary: a 15-40 charact
 Call stop_decision with your judgment.`;
 
 /** Read the last user text message from the transcript JSONL */
-async function getLastUserRequest(
+export async function getLastUserRequest(
   transcriptPath: string,
 ): Promise<string | null> {
   try {
     const content = await Deno.readTextFile(transcriptPath);
     const lines = content.trimEnd().split("\n");
 
-    // Scan from the end to find the last user message with actual text
+    // 末尾から走査し **本物のユーザー発話のみ** 返す。Stop hook feedback / [Request interrupted] /
+    // コマンド出力等のシステム生成メッセージは isRealUserMessage で除外する。
+    // (除外しないと、ループ2周目以降に "Stop hook feedback:" を直近リクエストと誤認し反復検出が落ちる)
     for (let i = lines.length - 1; i >= 0; i--) {
       try {
         const entry: TranscriptEntry = JSON.parse(lines[i]);
         if (entry.type !== "user" || !entry.message?.content) continue;
-
-        const msgContent = entry.message.content;
-        if (typeof msgContent === "string") {
-          const text = msgContent.trim();
-          if (text && !text.startsWith("[Request interrupted")) return text;
-          continue;
-        }
-
-        if (Array.isArray(msgContent)) {
-          // Extract text blocks, skip tool_result
-          const texts = msgContent
-            .filter(
-              (b) =>
-                b.type === "text" &&
-                b.text &&
-                !b.text.startsWith("[Request interrupted"),
-            )
-            .map((b) => b.text!.trim())
-            .filter((t) => t.length > 0);
-          if (texts.length > 0) return texts.join("\n");
-        }
+        if (!isRealUserMessage(entry.message.content)) continue;
+        const text = extractTextFromContent(entry.message.content).trim();
+        if (text) return text;
       } catch {
         // skip malformed lines
       }
@@ -117,7 +137,16 @@ async function main(): Promise<void> {
     const raw = new TextDecoder().decode(await readAll(Deno.stdin));
     const input: StopHookInput = JSON.parse(raw);
 
-    if (input.stop_hook_active) {
+    // 反復ディレクティブ検出のため先にユーザー直近リクエストを読む
+    const userRequest = input.transcript_path
+      ? await getLastUserRequest(input.transcript_path)
+      : null;
+    const loopActive = userRequest ? detectLoopDirective(userRequest) : false;
+
+    // 通常は stop_hook_active で早期 exit(2連続 block 防止の慣習)。
+    // ただし反復ディレクティブが有効な間は継続を駆動するため早期 exit しない
+    // (終了条件が満たされるか、CC の連続 block 上限=既定8回に達するまで block し続ける)。
+    if (input.stop_hook_active && !loopActive) {
       Deno.exit(0);
     }
 
@@ -136,18 +165,15 @@ async function main(): Promise<void> {
       defaultHeaders: { "anthropic-beta": "oauth-2025-04-20" },
     });
 
-    // Extract user's recent request from transcript
+    // userContext は先に取得済みの userRequest から構築
     let userContext = "";
-    if (input.transcript_path) {
-      const userRequest = await getLastUserRequest(input.transcript_path);
-      if (userRequest) {
-        // Truncate to keep token usage reasonable
-        const truncated =
-          userRequest.length > 500
-            ? userRequest.slice(0, 500) + "..."
-            : userRequest;
-        userContext = `User's recent request:\n${truncated}\n\n`;
-      }
+    if (userRequest) {
+      // Truncate to keep token usage reasonable
+      const truncated =
+        userRequest.length > 500
+          ? userRequest.slice(0, 500) + "..."
+          : userRequest;
+      userContext = `User's recent request:\n${truncated}\n\n`;
     }
 
     // Check for verification evidence
@@ -205,6 +231,16 @@ async function main(): Promise<void> {
       // No health data available
     }
 
+    // 反復ディレクティブが有効なら、終了条件の証拠が無い限り継続を強制する指示を足す
+    const loopSnippet = loopActive && userRequest
+      ? loopDirectiveSnippet(userRequest)
+      : "";
+    const loopNote = loopActive
+      ? `\n\nLOOP DIRECTIVE ACTIVE: ユーザーの直近リクエストに明示的な反復/ループ指示がある${
+          loopSnippet ? `（該当: "${loopSnippet}"）` : ""
+        }。should_stop は **false(継続)** にすること。例外は、Claude の最終メッセージに「ループの終了条件が満たされた具体的証拠」がある場合のみ — 例: レビュアー/codex が指摘ゼロを報告("指摘なし" / "no findings" / "0 件")、テスト全通過、目標状態に到達した確証。完了っぽい要約だけで証拠が無ければ継続(false)。なお、その指示がこの会話の進行中の反復タスクに実際には対応していない(既に終了/別件)なら stop を承認(true)してよい。`
+      : "";
+
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 256,
@@ -214,7 +250,7 @@ async function main(): Promise<void> {
       messages: [
         {
           role: "user",
-          content: `${userContext}Claude's last assistant message:\n\n${lastMessage}${verificationNote}${healthNote}`,
+          content: `${userContext}Claude's last assistant message:\n\n${lastMessage}${verificationNote}${healthNote}${loopNote}`,
         },
       ],
     });
@@ -278,4 +314,7 @@ async function main(): Promise<void> {
   Deno.exit(0);
 }
 
-main();
+// 直接実行時のみ起動(import 時=テスト時は走らせない)
+if (import.meta.main) {
+  main();
+}
