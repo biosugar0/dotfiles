@@ -1,0 +1,222 @@
+#!/bin/bash
+# codex-worker-apply — codex worktree の変更を primary に統合する承認制 wrapper (PR1)
+#
+# codex-worker(haiku driver)には統合させない。統合は「親 Claude + user approval + 専用 wrapper」の責務。
+# このツールは write role の worktree(.wt/ai-codex/<slug>)で codex が作った変更を primary working tree に
+# 取り込む唯一の経路。codex の自己申告(テスト通過等)は信用せず、何を取り込むかを必ず人に見せる。
+#
+# 使い方:
+#   codex-worker-apply --worktree <path> [--mode patch|cherry-pick] [--allowed-files <file>]
+#                      [--slug <slug>] [--apply] [--allow-out-of-scope]
+#
+#   --apply 無し(既定): レポートのみ(何も統合しない)。worktree path / 統合基準(merge-base) / 現在 primary HEAD /
+#                       changed files / diff stat / config touched / binary・rename / apply mode /
+#                       APPROVAL REQUIRED を出す。
+#   --apply 有り: 実際に統合。patch=working tree へ git apply --3way 後、今回ステージされた分のみ未ステージに戻す。
+#                cherry-pick=worktree 内で一時 commit → primary で cherry-pick -n(同じく未ステージに戻す)。
+#   --allowed-files: 1 行 1 path(基準は repo root)。変更がこの集合外なら OUT_OF_SCOPE。
+#   --allow-out-of-scope: OUT_OF_SCOPE でも --apply を許可(2 段目の明示承認)。
+#
+# 方針/既知の限界:
+#   - git merge は使わない(block-merge と整合)。codex は worktree 内で commit/push しない(統合はこの wrapper のみ)。
+#   - 統合後 primary では変更を **未ステージ** で残す(golden rule「git add はファイルごと」を保つ)。
+#   - main/master 上での --apply は拒否(block-main と整合)。primary に staged 変更がある時も拒否(混入防止)。
+#   - 統合基準は merge-base(worktree HEAD, primary HEAD)。codex が worktree 内で commit していても取りこぼさない。
+#   - **filter-exec**: `git add -A` は in-tree `.gitattributes` + repo-local `filter.*.clean` を実行しうる。
+#     untrusted な write(未知 repo の取り込み)は外部 lane(plan PR4)で行うこと。trusted-write は codex 非敵対前提。
+#   - **tracked secret**: worktree checkout には tracked な .env/credentials が含まれる。未知 repo の untrusted-write は避ける。
+
+set -euo pipefail
+
+die() { echo "codex-worker-apply: $*" >&2; exit 64; }
+
+WT=""; MODE="patch"; ALLOWED=""; SLUG=""; APPLY=0; ALLOW_OOS=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --worktree) shift; [ $# -gt 0 ] || die "--worktree requires a path"; WT="$1" ;;
+    --worktree=*) WT="${1#--worktree=}" ;;
+    --mode) shift; [ $# -gt 0 ] || die "--mode requires patch|cherry-pick"; MODE="$1" ;;
+    --mode=*) MODE="${1#--mode=}" ;;
+    --allowed-files) shift; [ $# -gt 0 ] || die "--allowed-files requires a file"; ALLOWED="$1" ;;
+    --allowed-files=*) ALLOWED="${1#--allowed-files=}" ;;
+    --slug) shift; [ $# -gt 0 ] || die "--slug requires a value"; SLUG="$1" ;;
+    --slug=*) SLUG="${1#--slug=}" ;;
+    --apply) APPLY=1 ;;
+    --allow-out-of-scope) ALLOW_OOS=1 ;;
+    -h|--help) sed -n '2,33p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) die "unknown option: $1" ;;
+  esac
+  shift
+done
+
+[ -n "$WT" ] || die "--worktree is required"
+[ -d "$WT" ] || die "worktree not found: $WT"
+case "$MODE" in patch|cherry-pick) ;; *) die "--mode must be patch or cherry-pick (got: $MODE)";; esac
+[ -z "$SLUG" ] || case "$SLUG" in *[!A-Za-z0-9._-]*) die "--slug は英数 . _ - のみ可(got: $SLUG)";; esac
+git -C "$WT" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not a git worktree: $WT"
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "current dir is not a git repo"
+[ -z "$ALLOWED" ] || [ -f "$ALLOWED" ] || die "allowed-files not found: $ALLOWED"
+
+# WT を絶対パス化し、primary は toplevel に固定(サブディレクトリ起動でも path 基準を repo root に揃える)
+WT=$(cd "$WT" && pwd) || die "cannot resolve worktree path"
+PRIMARY_ROOT=$(git rev-parse --show-toplevel) || die "cannot resolve primary repo root"
+cd "$PRIMARY_ROOT"
+
+# worktree と primary が同じ .git を共有しているか(xargs/sh -c は使わずシェルインジェクションを避ける)
+wt_common=$(cd "$WT" && cd "$(git rev-parse --git-common-dir)" && pwd) || die "cannot resolve worktree git dir"
+pr_common=$(cd "$(git rev-parse --git-common-dir)" && pwd) || die "cannot resolve primary git dir"
+[ "$wt_common" = "$pr_common" ] || die "worktree と現在の repo が別 .git を共有している(WT=$wt_common primary=$pr_common)"
+
+# worktree が primary 本体を指していたら拒否(さもないと下の add -A が primary index を汚染する)
+WT_TOP=$(git -C "$WT" rev-parse --show-toplevel) || die "cannot resolve worktree toplevel"
+[ "$WT_TOP" != "$PRIMARY_ROOT" ] || die "--worktree が primary 本体を指している。隔離 worktree を指定すること。"
+
+# throwaway worktree なので add -A で新規ファイルも含め全変更をステージ(=完全な diff を得る)。
+# 注意: in-tree .gitattributes + repo-local filter で clean filter が走りうる(上記「filter-exec」参照)。
+git -C "$WT" add -A
+
+WT_HEAD=$(git -C "$WT" rev-parse HEAD)
+PRIMARY_HEAD=$(git rev-parse HEAD)
+PRIMARY_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+# 統合基準 = merge-base。codex が worktree 内で commit していても DIFFBASE..(index) で全変更を捕捉する。
+DIFFBASE=$(git -C "$WT" merge-base HEAD "$PRIMARY_HEAD" 2>/dev/null || echo "$WT_HEAD")
+WT_COMMITS=$(git -C "$WT" rev-list --count "$DIFFBASE..$WT_HEAD" 2>/dev/null || echo 0)
+DRIFT=0; [ "$DIFFBASE" = "$PRIMARY_HEAD" ] || DRIFT=1
+
+CHANGED=$(git -C "$WT" diff --cached --no-ext-diff --name-only "$DIFFBASE" || true)
+NAME_STATUS=$(git -C "$WT" diff --cached --no-ext-diff --name-status "$DIFFBASE" || true)
+STAT=$(git -C "$WT" diff --cached --no-ext-diff --stat "$DIFFBASE" || true)
+SUMMARY=$(git -C "$WT" diff --cached --no-ext-diff --summary "$DIFFBASE" || true)
+BINARY=$(git -C "$WT" diff --cached --no-ext-diff --numstat "$DIFFBASE" | awk -F'\t' '$1=="-"&&$2=="-"{print $3}' || true)
+RENAMES=$(printf '%s\n' "$SUMMARY" | grep -i 'rename ' || true)
+PRIMARY_DIRTY=$(git status --porcelain=v1 -uall || true)
+PRIMARY_STAGED=$(git diff --cached --name-only || true)
+
+NCHANGED=0; [ -n "$CHANGED" ] && NCHANGED=$(printf '%s\n' "$CHANGED" | grep -c . || true)
+
+# 制御文字/改行を含む path は git が "..." でクオート出力する。先頭 ':' は pathspec magic として
+# git reset 等に解釈される。いずれも安全に扱えないので統合を拒否する。
+UNSAFE_PATHS=$(printf '%s\n' "$CHANGED" | grep -nE '^("|:)' || true)
+
+# config/deps/CI/migration 等の高リスク変更検出
+RISK_RX='(^|/)(package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.(toml|lock)|go\.(mod|sum)|requirements[^/]*\.txt|poetry\.lock|Pipfile([^/]*)?|Gemfile([^/]*)?|composer\.(json|lock)|tsconfig[^/]*\.json|.*\.config\.(js|ts|cjs|mjs)|\.eslintrc[^/]*|\.prettierrc[^/]*|Makefile|Dockerfile[^/]*|docker-compose[^/]*|.*\.tf|settings\.json)$|(^|/)\.github/|(^|/)migrations?/|(^|/).*\.lock$'
+CONFIG_HITS=$(printf '%s\n' "$CHANGED" | grep -nE "$RISK_RX" || true)
+RISK="low"
+if [ -n "$CONFIG_HITS" ] || [ "$NCHANGED" -gt 3 ]; then RISK="high"; fi
+
+# allowed_files(任意): 変更がこの subset 外なら OUT_OF_SCOPE
+OOS=0; OOS_FILES=""
+if [ -n "$ALLOWED" ]; then
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    case "$f" in '#'*) continue ;; esac
+    if ! grep -Fxq "$f" "$ALLOWED"; then OOS=1; OOS_FILES="$OOS_FILES$f"$'\n'; fi
+  done <<EOF
+$CHANGED
+EOF
+fi
+
+# ===== レポート =====
+echo "================ codex-worker-apply report ================"
+echo "worktree         : $WT"
+echo "slug             : ${SLUG:-（未指定）}"
+echo "integration base : $DIFFBASE  (merge-base)"
+echo "primary HEAD(now): $PRIMARY_HEAD  [branch: $PRIMARY_BRANCH]"
+echo "codex commits    : $WT_COMMITS (worktree 内の base からのコミット数)"
+if [ "$DRIFT" -eq 1 ]; then
+  echo "HEAD DRIFT       : YES → 統合は --3way / cherry-pick -n で取り込む"
+else
+  echo "HEAD DRIFT       : no (base == primary)"
+fi
+echo "apply mode       : $MODE"
+echo "changed files    : $NCHANGED"
+echo "risk             : $RISK $( [ "$RISK" = high ] && echo '(config/deps/CI/migration or >3 files)' )"
+echo "config touched?  : $( [ -n "$CONFIG_HITS" ] && echo 'YES' || echo 'no' )"
+echo "binary files     : $( [ -n "$BINARY" ] && printf '%s' "$BINARY" | tr '\n' ' ' || echo 'none' )"
+echo "renames          : $( [ -n "$RENAMES" ] && echo 'YES (下記 summary 参照)' || echo 'none' )"
+echo "primary dirty?   : $( [ -n "$PRIMARY_DIRTY" ] && echo 'YES (適用先に未コミット変更あり)' || echo 'no' )"
+echo "primary staged?  : $( [ -n "$PRIMARY_STAGED" ] && echo 'YES (統合前に index を空にすること)' || echo 'no' )"
+if [ -n "$ALLOWED" ]; then
+  echo "allowed_files    : $ALLOWED → $( [ "$OOS" -eq 1 ] && echo 'OUT_OF_SCOPE (下記)' || echo 'all in scope' )"
+else
+  echo "allowed_files    : （未指定） $( [ "$RISK" = high ] && echo '→ 高リスク: allowed_files 指定を推奨' )"
+fi
+echo "-----------------------------------------------------------"
+echo "name-status:"; printf '%s\n' "$NAME_STATUS" | sed 's/^/  /'
+echo "diffstat:";    printf '%s\n' "$STAT" | sed 's/^/  /'
+[ -n "$SUMMARY" ] && { echo "summary:"; printf '%s\n' "$SUMMARY" | sed 's/^/  /'; }
+[ "$OOS" -eq 1 ] && { echo "OUT_OF_SCOPE files:"; printf '%s' "$OOS_FILES" | sed 's/^/  /'; }
+echo "==========================================================="
+
+if [ -z "$CHANGED" ]; then
+  echo "統合対象の変更なし(worktree は base と同一)。終了。"
+  exit 0
+fi
+
+if [ "$APPLY" -eq 0 ]; then
+  echo
+  echo "APPROVAL REQUIRED: 内容を確認し、問題なければ同じコマンドに --apply を付けて再実行する。"
+  [ -n "$UNSAFE_PATHS" ] && echo "  ※ 制御文字/':' で始まる危険な path がある。統合には手動対応が必要。"
+  [ "$OOS" -eq 1 ]      && echo "  ※ OUT_OF_SCOPE のため統合には --allow-out-of-scope も必要。"
+  [ "$RISK" = high ]    && echo "  ※ 高リスク変更。allowed_files で範囲を固定してからの統合を推奨。"
+  [ -n "$PRIMARY_STAGED" ] && echo "  ※ primary に staged 変更あり。統合前に git restore --staged で空にすること。"
+  exit 0
+fi
+
+# ===== --apply: 実統合 =====
+case "$PRIMARY_BRANCH" in
+  main|master|HEAD) die "main/master/detached HEAD 上では統合しない。feature branch に切り替えてから統合すること。" ;;
+esac
+[ -z "$UNSAFE_PATHS" ] || die "制御文字/改行/':' を含む危険な path がある。安全に統合できない。手動で確認・対応せよ:
+$UNSAFE_PATHS"
+[ -z "$PRIMARY_STAGED" ] || die "primary に staged 変更がある。混入を防ぐため統合前に index を空にすること(git restore --staged ...)。"
+if [ "$OOS" -eq 1 ] && [ "$ALLOW_OOS" -eq 0 ]; then
+  die "OUT_OF_SCOPE の変更がある。範囲を見直すか、意図的なら --allow-out-of-scope を付けて再実行。"
+fi
+
+echo ">>> 統合を実行(mode=$MODE, base=$DIFFBASE, branch=$PRIMARY_BRANCH)"
+BEFORE_STAGED=$(git diff --cached --name-only | LC_ALL=C sort)
+if [ "$MODE" = "patch" ]; then
+  PATCH=$(mktemp /tmp/codex-apply.XXXXXX.patch)
+  CHECKERR=$(mktemp /tmp/codex-apply-check.XXXXXX.err)
+  trap 'rm -f "$PATCH" "$CHECKERR"' EXIT
+  git -C "$WT" diff --cached --no-ext-diff --binary --full-index "$DIFFBASE" >"$PATCH"
+  if ! git apply --check --3way "$PATCH" 2>"$CHECKERR"; then
+    echo "git apply --check 失敗(conflict の可能性):" >&2
+    sed 's/^/  /' "$CHECKERR" >&2
+    die "patch を clean に適用できない。--mode cherry-pick を試すか、primary を base に揃えてから再実行。"
+  fi
+  git apply --3way "$PATCH"   # --3way は --index を含意するため一旦ステージされる
+  echo ">>> git apply --3way 完了。"
+else
+  # cherry-pick: 未コミットの staged 差分があれば一時 commit → DIFFBASE..HEAD を -n で取り込む
+  if ! git -C "$WT" diff --cached --quiet HEAD 2>/dev/null; then
+    git -C "$WT" commit --no-verify -m "codex-worker integration: ${SLUG:-codex}" >/dev/null
+  fi
+  WT_HEAD=$(git -C "$WT" rev-parse HEAD)
+  [ "$DIFFBASE" != "$WT_HEAD" ] || die "cherry-pick 対象のコミットがない。"
+  if ! git cherry-pick -n "$DIFFBASE..$WT_HEAD"; then
+    echo "cherry-pick で conflict。primary を確認し解消するか、git cherry-pick --abort で中止。" >&2
+    exit 1
+  fi
+  echo ">>> cherry-pick -n 完了($DIFFBASE..$WT_HEAD)。"
+fi
+
+# golden rule「git add はファイルごと」を保つため、今回新たにステージされた分だけ未ステージに戻す
+AFTER_STAGED=$(git diff --cached --name-only | LC_ALL=C sort)
+NEWLY=$(comm -13 <(printf '%s\n' "$BEFORE_STAGED") <(printf '%s\n' "$AFTER_STAGED") || true)
+if [ -n "$NEWLY" ]; then
+  printf '%s\n' "$NEWLY" | while IFS= read -r p; do
+    [ -n "$p" ] && git reset -q HEAD -- "$p" 2>/dev/null || true
+  done
+  echo ">>> 統合分を未ステージに戻した(変更はファイルごとに git add すること)。"
+fi
+
+echo
+echo "primary status:"; git status --short | sed 's/^/  /'
+echo "primary diffstat:"; git diff --no-ext-diff --stat | sed 's/^/  /'
+echo
+echo "次の手順:"
+echo "  1. 変更をレビュー(git diff)。codex の自己申告は信用せず、verify/test は自分で実行する。"
+echo "  2. 問題なければファイルごとに git add → safe-commit。"
+echo "  3. 統合が済んだら worktree を後始末: git wt -d ai-codex/${SLUG:-<slug>}"

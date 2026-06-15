@@ -1,0 +1,237 @@
+#!/bin/bash
+# codex-worker-env — codex exec を制御 env で起動する mutation-boundary wrapper (PR1)
+#
+# 目的: codex-worker(haiku driver)が起動する `codex exec` に渡る環境を絞る。
+#   - env 経由の secret 露出を断つ(allowlist 方式。denylist では将来の *_TOKEN 等を取りこぼす)
+#   - git/ssh の認証経路を無効化し codex が push/fetch/clone で認証できないようにする
+#   - hardened role では HOME を temp 化し ~/.ssh ~/.aws ~/.config/gh ~/.netrc の default 探索も断つ
+#     (auth は CODEX_HOME=実 ~/.codex を codex に尊重させるので壊れない。auth.json はコピーしない)
+#     さらに toolchain の credential home(CARGO_HOME/RUSTUP_HOME 等)も渡さない。
+#   - hardened role では network/exfil 系 CLI(curl/gh/aws/ssh/npm 等)を shadow stub で封じる
+#
+# これは hard boundary ではなく capability hygiene。Claude セッションは cage(Seatbelt) 下だが
+# cage は read 全許可ゆえ絶対パス read / 絶対パス実行(/usr/bin/curl 等)は防げない。
+# shadow-bin も network boundary ではない: インタープリタ(python/node/perl/ruby)経由の socket や
+# 絶対パス起動は塞げない。casual な exfil ツール(curl/gh/aws)使用を上げるだけ。
+# 完全隔離は外部 lane の tighter cage が必要(plan PR4)。env scrub は exfil の主経路(env secret)を断つ仕上げ。
+#
+# 使い方:
+#   codex-worker-env [--role trusted|hardened] [--print-env|--dry-run] -- <command...>
+#   codex-worker-env --self-test
+# 例(driver から):
+#   codex-worker-env --role trusted -- codex exec --dangerously-bypass-approvals-and-sandbox --cd "$PWD" - <<'TASK' ...
+#
+# online-research は env 的には --role hardened と同じ(curl/wget は使わせない)。
+# codex 内蔵 web_search の有効化は driver 側で `-c tools.web_search=true` を付ける責務。
+#
+# bash 3.2 互換(/bin/bash on macOS)で書く: ${!var} 修飾子・連想配列を使わず printenv を用いる。
+
+set -euo pipefail
+
+# 元 PATH は codex へ渡す用に退避し、本スクリプト自身のコマンド探索は信頼できる system path に固定する
+# (PATH を poison された(例: ~/.local/bin に偽 grep)状態で printenv/env/mktemp 等を未スクラブ env のまま
+#  実行する乗っ取りを防ぐ)。
+ORIG_PATH="$PATH"
+PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+export PATH
+
+SELF="${BASH_SOURCE[0]}"
+case "$SELF" in
+  */*) ;;
+  *) SELF=$(command -v "$SELF" 2>/dev/null || echo "$SELF") ;;
+esac
+
+ROLE="trusted"
+MODE="exec"   # exec | print-env | dry-run | self-test
+
+# ===== 引数解析(-- 以降がコマンド) =====
+CMD=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --role)
+      shift
+      [ $# -gt 0 ] || { echo "codex-worker-env: --role requires an argument" >&2; exit 64; }
+      ROLE="$1"
+      ;;
+    --role=*) ROLE="${1#--role=}" ;;
+    --print-env) MODE="print-env" ;;
+    --dry-run)   MODE="dry-run" ;;
+    --self-test) MODE="self-test" ;;
+    --) shift; CMD=("$@"); break ;;
+    -h|--help) sed -n '2,30p' "$SELF" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "codex-worker-env: unknown option: $1 (commands go after --)" >&2; exit 64 ;;
+  esac
+  shift
+done
+
+case "$ROLE" in
+  trusted|hardened) ;;
+  *) echo "codex-worker-env: --role must be 'trusted' or 'hardened' (got: $ROLE)" >&2; exit 64 ;;
+esac
+
+# ===== self-test(ENVARGS 構築前に short-circuit。実 codex を呼ばず env 整形だけ検証) =====
+run_self_test() {
+  set +e
+  local fail=0 out
+  _ck() { # mode label regex haystack  (mode: absent|present)
+    local mode="$1" label="$2" rx="$3" hay="$4"
+    if printf '%s\n' "$hay" | grep -qE "$rx"; then
+      [ "$mode" = present ] && echo "  ok: $label" || { echo "  FAIL: $label ($rx present)"; fail=1; }
+    else
+      [ "$mode" = absent ] && echo "  ok: $label" || { echo "  FAIL: $label ($rx missing)"; fail=1; }
+    fi
+  }
+
+  echo "[trusted role]"
+  out=$(BO_API_KEY=sentinel-bo NPM_CONFIG_TOKEN=sentinel-npm OPENAI_API_KEY=sentinel-oai \
+        DD_API_KEY=sentinel-dd PASSWORD=sentinel-pw GOOGLE_APPLICATION_CREDENTIALS=/x/cred.json \
+        AWS_SECRET_ACCESS_KEY=sentinel-aws CLIENT_SECRET=sentinel-cs LC_SECRET_INJECT=sentinel-lc \
+        PYENV_ROOT=/tmp/pyenv-test CARGO_HOME=/tmp/cargo-test NVM_DIR=/tmp/nvm-test \
+        bash "$SELF" --role trusted --print-env)
+  _ck absent  "BO_API_KEY dropped"                     '^BO_API_KEY='                     "$out"
+  _ck absent  "NPM_CONFIG_TOKEN dropped"               '^NPM_CONFIG_TOKEN='               "$out"
+  _ck absent  "OPENAI_API_KEY dropped"                 '^OPENAI_API_KEY='                 "$out"
+  _ck absent  "DD_API_KEY dropped"                     '^DD_API_KEY='                     "$out"
+  _ck absent  "PASSWORD dropped"                       '^PASSWORD='                       "$out"
+  _ck absent  "GOOGLE_APPLICATION_CREDENTIALS dropped" '^GOOGLE_APPLICATION_CREDENTIALS=' "$out"
+  _ck absent  "AWS_SECRET_ACCESS_KEY dropped"          '^AWS_SECRET_ACCESS_KEY='          "$out"
+  _ck absent  "CLIENT_SECRET dropped"                  '^CLIENT_SECRET='                  "$out"
+  _ck absent  "non-standard LC_* dropped"              '^LC_SECRET_INJECT='               "$out"
+  _ck present "PYENV_ROOT kept"                         '^PYENV_ROOT=/tmp/pyenv-test$'     "$out"
+  _ck present "CARGO_HOME kept"                         '^CARGO_HOME=/tmp/cargo-test$'     "$out"
+  _ck present "NVM_DIR kept"                            '^NVM_DIR=/tmp/nvm-test$'          "$out"
+  _ck present "HOME kept"                               '^HOME='                           "$out"
+  _ck present "PATH kept"                               '^PATH='                           "$out"
+  _ck present "GIT_CONFIG_GLOBAL=/dev/null"             '^GIT_CONFIG_GLOBAL=/dev/null$'    "$out"
+  _ck present "GIT_CONFIG_NOSYSTEM=1"                   '^GIT_CONFIG_NOSYSTEM=1$'          "$out"
+  _ck present "GIT_TERMINAL_PROMPT=0"                   '^GIT_TERMINAL_PROMPT=0$'          "$out"
+  _ck present "GIT_ASKPASS=/usr/bin/false"              '^GIT_ASKPASS=/usr/bin/false$'     "$out"
+  _ck present "GIT_SSH=/usr/bin/false"                  '^GIT_SSH=/usr/bin/false$'         "$out"
+  _ck present "GIT_SSH_COMMAND=/usr/bin/false"          '^GIT_SSH_COMMAND=/usr/bin/false$' "$out"
+  _ck present "SSH_AUTH_SOCK emptied"                   '^SSH_AUTH_SOCK=$'                 "$out"
+
+  echo "[hardened role]"
+  out=$(BO_API_KEY=sentinel-bo OPENAI_API_KEY=sentinel-oai CARGO_HOME=/tmp/cargo-test \
+        bash "$SELF" --role hardened --print-env)
+  _ck absent  "BO_API_KEY dropped (hardened)"          '^BO_API_KEY='                    "$out"
+  _ck absent  "OPENAI_API_KEY dropped (hardened)"      '^OPENAI_API_KEY='                "$out"
+  _ck absent  "CARGO_HOME dropped (hardened)"          '^CARGO_HOME='                    "$out"
+  _ck present "CODEX_HOME -> real .codex"              "^CODEX_HOME=$HOME/\\.codex$"      "$out"
+  _ck present "HOME is temp dir"                        'codex-worker-home\.'             "$out"
+  _ck absent  "HOME is not real HOME"                  "^HOME=$HOME$"                     "$out"
+  _ck present "PATH shadow-bin first"                  '^PATH=[^:]*codex-worker-home\.[^:]*/shadow-bin:' "$out"
+
+  if [ "$fail" -eq 0 ]; then echo "SELF-TEST: PASS"; return 0; else echo "SELF-TEST: FAIL"; return 1; fi
+}
+
+if [ "$MODE" = "self-test" ]; then
+  run_self_test
+  exit $?
+fi
+
+# ===== env allowlist の構築 =====
+# core: 常に保持。HOME/PATH は role で確定後に追加。
+CORE_VARS="TERM TMPDIR LANG SHELL USER LOGNAME"
+# curated 非 secret 機能 env: toolchain/version manager 系。trusted のみ・設定時のみ保持。
+# strict 開始。実 build/test で不足が判明した正当な機能 env のみ追加すること。
+# *_TOKEN / *_KEY / *_SECRET / PASSWORD / CLIENT_SECRET / GOOGLE_APPLICATION_CREDENTIALS /
+# NPM_CONFIG_* / NODE_AUTH_TOKEN は **絶対に追加しない**(--self-test が secret 不在を assert)。
+CURATED_VARS="NVM_DIR PYENV_ROOT CARGO_HOME RUSTUP_HOME GOPATH GOROOT JAVA_HOME ASDF_DIR"
+# 標準ロケールカテゴリのみ(LC_* ワイルドカードは LC_SECRET 等の混入を許すため使わない)
+LC_VARS="LC_ALL LC_CTYPE LC_COLLATE LC_MESSAGES LC_MONETARY LC_NUMERIC LC_TIME LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT LC_IDENTIFICATION"
+
+ENVARGS=()
+add_if_set() {
+  local name="$1" val
+  if val=$(printenv "$name" 2>/dev/null); then
+    ENVARGS+=("$name=$val")
+  fi
+}
+
+REAL_HOME="$HOME"
+HOME_VAL="$HOME"
+PATH_VAL="$ORIG_PATH"
+TMPHOME=""
+cleanup() { [ -n "$TMPHOME" ] && rm -rf "$TMPHOME" 2>/dev/null || true; }
+
+setup_hardened() {
+  local base="${TMPDIR:-/tmp}"
+  TMPHOME=$(mktemp -d "${base%/}/codex-worker-home.XXXXXX")
+  trap cleanup EXIT    # mktemp 直後に arm(以降の失敗でも temp HOME を残さない)
+  # network/exfil 系 CLI を shadow stub で封じる(PATH 先頭に差し込む)。絶対パス/インタープリタ経由は塞げない。
+  local shadow="$TMPHOME/shadow-bin" t
+  mkdir -p "$shadow"
+  for t in curl wget gh aws az gcloud ssh scp sftp rsync nc ncat netcat socat telnet ftp \
+           openssl dig host nslookup ssh-add ssh-keygen \
+           npm npx yarn pnpm pip pip2 pip3 brew kubectl docker; do
+    {
+      printf '#!/bin/sh\n'
+      printf 'echo "codex-worker hardened: %s is blocked (untrusted task: no network/exfil tools)" >&2\n' "$t"
+      printf 'exit 127\n'
+    } >"$shadow/$t"
+    chmod 755 "$shadow/$t"
+  done
+  HOME_VAL="$TMPHOME"
+  PATH_VAL="$shadow:$ORIG_PATH"
+}
+
+if [ "$ROLE" = "hardened" ]; then
+  setup_hardened
+fi
+
+ENVARGS+=("HOME=$HOME_VAL")
+ENVARGS+=("PATH=$PATH_VAL")
+for v in $CORE_VARS; do add_if_set "$v"; done
+for v in $LC_VARS; do add_if_set "$v"; done
+# curated 機能 env は trusted のみ(hardened では toolchain の credential home 露出を避けるため渡さない)
+if [ "$ROLE" = "trusted" ]; then
+  for v in $CURATED_VARS; do add_if_set "$v"; done
+else
+  # hardened: temp HOME でも auth を壊さないよう CODEX_HOME を実 ~/.codex に固定。
+  # ⚠ 残存リスク(plan §2 で受容済み): codex 自身は OpenAI token を auth.json から読む必要があり不可避。
+  #    shadow-bin は curl/gh/aws 等を封じるが python/node 経由の socket や絶対パス実行は塞げない=network boundary ではない。
+  #    つまり hardened は env の他 secret(DD_API_KEY 等 12 個)は守るが、codex 自身の OpenAI token の exfil は防げない。
+  #    真に untrusted なコード実行は外部 lane(plan PR4, network sandbox)で行うこと。hardened は capability hygiene。
+  ENVARGS+=("CODEX_HOME=$REAL_HOME/.codex")
+fi
+
+# git/ssh hardening(両 role 共通。codex に認証情報・global/system config を渡さない)
+ENVARGS+=("GIT_CONFIG_GLOBAL=/dev/null")
+ENVARGS+=("GIT_CONFIG_NOSYSTEM=1")
+ENVARGS+=("GIT_TERMINAL_PROMPT=0")
+ENVARGS+=("GIT_ASKPASS=/usr/bin/false")
+ENVARGS+=("SSH_AUTH_SOCK=")
+ENVARGS+=("GIT_SSH=/usr/bin/false")
+ENVARGS+=("GIT_SSH_COMMAND=/usr/bin/false")   # repo-local core.sshCommand より優先され ssh transport を殺す
+
+# ===== モード別実行 =====
+case "$MODE" in
+  print-env)
+    trap cleanup EXIT
+    env -i "${ENVARGS[@]}" env
+    ;;
+  dry-run)
+    trap cleanup EXIT
+    printf 'env -i \\\n'
+    for e in "${ENVARGS[@]}"; do printf '  %q \\\n' "$e"; done
+    if [ "${#CMD[@]}" -gt 0 ]; then
+      printf ' '; for a in "${CMD[@]}"; do printf '%q ' "$a"; done; printf '\n'
+    else
+      printf '  <command...>\n'
+    fi
+    ;;
+  exec)
+    [ "${#CMD[@]}" -gt 0 ] || { echo "codex-worker-env: no command given (use -- <command...>)" >&2; exit 64; }
+    if [ "$ROLE" = "hardened" ]; then
+      # temp HOME の後始末のため exec せず子として実行 → EXIT で cleanup(trap は setup_hardened で arm 済)
+      set +e
+      env -i "${ENVARGS[@]}" "${CMD[@]}"
+      rc=$?
+      set -e
+      exit "$rc"
+    else
+      # trusted は temp 資源を持たないので exec で軽量に
+      exec env -i "${ENVARGS[@]}" "${CMD[@]}"
+    fi
+    ;;
+esac
