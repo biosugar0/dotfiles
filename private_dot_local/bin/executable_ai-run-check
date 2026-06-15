@@ -1,0 +1,205 @@
+#!/bin/bash
+# ai-run-check — check コマンドを実行し、同一失敗の反復(thrash loop)を機械的に検出する wrapper (PR2)
+#
+# 目的: LLM の自己申告に頼らず、失敗出力を正規化して signature 化し、同じ失敗が連続したら警告する。
+#   - check コマンドの stdout/stderr を tee で見せつつ捕捉し、exit code を透過する(透明 wrapper)。
+#   - 失敗時は failure block を抽出 → 正規化(path/pid/time/hash/行番号を除去) → signature(sha256)。
+#   - 直前の signature と同じなら consecutive_same_failure を増やす。成功で counter をリセット。
+#   - v1 = warning のみ(全停止しない)。max(既定3)到達で「同じ失敗の反復」を警告し戦略変更を促す。
+#     v2(同一失敗3回で Edit/codex-write を PreToolUse block)は別 hook が loop.json を読んで実施する想定。
+#
+# signature の等価判定に **changed_files_hash は含めない**。含めると編集のたびに signature が変わり
+# counter がリセットされ「編集しても同じ失敗」を検出できなくなるため。changed_files_hash と step は
+# metadata として loop.json に記録するだけ。
+#
+# 使い方:
+#   ai-run-check [--max N] [--phase investigate|implement|verify] [--slug S] -- <check command...>
+#   ai-run-check --status        # loop.json を表示
+#   ai-run-check --reset         # loop counter をクリア
+#   ai-run-check --self-test     # 正規化と signature 安定性を検証(実コマンドを使わない)
+#
+# loop.json は ai/state/loop.json(repo root 基準, gitignore)。env AI_RUN_CHECK_LOOP で上書き可(テスト用)。
+
+set -euo pipefail
+
+MAX=3; PHASE=""; SLUG=""; MODE="run"
+CMD=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --max) shift; MAX="$1" ;;
+    --max=*) MAX="${1#--max=}" ;;
+    --phase) shift; PHASE="$1" ;;
+    --phase=*) PHASE="${1#--phase=}" ;;
+    --slug) shift; SLUG="$1" ;;
+    --slug=*) SLUG="${1#--slug=}" ;;
+    --status) MODE="status" ;;
+    --reset) MODE="reset" ;;
+    --self-test) MODE="self-test" ;;
+    --) shift; CMD=("$@"); break ;;
+    -h|--help) sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "ai-run-check: unknown option: $1 (command goes after --)" >&2; exit 64 ;;
+  esac
+  shift
+done
+
+REPO=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+LOOP_FILE="${AI_RUN_CHECK_LOOP:-$REPO/ai/state/loop.json}"
+
+# slug/phase はファイルに展開するので安全な文字に限定(loop.json への JSON injection 防止)
+SLUG=$(printf '%s' "$SLUG" | tr -cd 'A-Za-z0-9._-')
+PHASE=$(printf '%s' "$PHASE" | tr -cd 'A-Za-z0-9._-')
+
+# ---- 正規化(path/pid/time/hash/行番号を除去して signature を安定させる) ----
+normalize() {
+  REPO="$REPO" HM="$HOME" TMP="${TMPDIR:-/tmp}" perl -pe '
+    s/\e\[[0-9;]*[A-Za-z]//g;                                   # ANSI escape
+    s/\Q$ENV{REPO}\E/<REPO>/g if $ENV{REPO};
+    s/\Q$ENV{HM}\E/<HOME>/g if $ENV{HM};
+    s/\Q$ENV{TMP}\E/<TMP>/g if $ENV{TMP};
+    s{/private/var/folders/[^\s:()]+}{<TMP>}g;
+    s{/tmp/[^\s:()]+}{<TMP>}g;
+    s{/(Users|home|var|private|opt|tmp|usr|etc|Library|System|Applications)/[^\s:()]+}{<PATH>}g; # 残る絶対パス
+    s/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/<UUID>/gi; # UUID
+    s/\b[0-9a-f]{7,40}\b/<HASH>/g;                              # git hash / hex id
+    s/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}\S*/<TIME>/g;       # ISO timestamp
+    s/\b\d{1,2}:\d{2}:\d{2}(\.\d+)?\b/<TIME>/g;                 # HH:MM:SS(.ms)
+    s/(\d+(\.\d+)?)(ms|s|µs|ns)\b/<DUR>/g;                      # duration
+    s/\((\d+),(\d+)\)/(<N>,<N>)/g;                              # tsc (line,col)
+    s/:(\d+)(:\d+)?/:<N>/g;                                     # :line / :line:col
+    s/\b\d{5,}\b/<NUM>/g;                                       # PID/port/ms(>=5桁)
+  '
+}
+
+# ---- failure kind 判定と block 抽出 ----
+classify_and_extract() {  # $1=output file → echoes "KIND" then block on stdout (block after first line)
+  local f="$1" kind block
+  if   grep -qE 'error TS[0-9]+' "$f"; then kind=tsc
+  elif grep -qE '^error\[E[0-9]+\]|^error:' "$f"; then kind=cargo
+  elif grep -qE '^--- FAIL|^FAIL\b.*\.go' "$f"; then kind=go
+  elif grep -qiE '(^|[[:space:]])(FAIL|✕|×)([[:space:]])|AssertionError' "$f"; then kind=jest
+  elif grep -qE '^(FAILED|ERROR)|^E[[:space:]]|^_+ .* _+$|assert' "$f"; then kind=pytest
+  else kind=generic
+  fi
+  # grep|head は pipefail 下で head が早期 close すると grep が SIGPIPE(141)。|| true で吸収する。
+  case "$kind" in
+    tsc)    block=$(grep -E 'error TS[0-9]+' "$f" | head -40 || true) ;;
+    cargo)  block=$(grep -E '^error(\[E[0-9]+\])?:|^ *--> |^ *= note:|expected|found' "$f" | head -40 || true) ;;
+    go)     block=$(grep -E '^--- FAIL|_test\.go:|^panic:|FAIL\b' "$f" | head -40 || true) ;;
+    jest)   block=$(grep -iE '(FAIL|✕|×|AssertionError|Expected|Received)' "$f" | head -40 || true) ;;
+    pytest) block=$(grep -E '^(FAILED|ERROR)|^E[[:space:]]|AssertionError' "$f" | head -40 || true) ;;
+    *)      block=$(tail -80 "$f" || true) ;;
+  esac
+  [ -n "$block" ] || block=$(tail -80 "$f" || true)
+  printf '%s\n' "$kind"
+  printf '%s\n' "$block"
+}
+
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+sig_of() { shasum -a 256 | cut -d' ' -f1 | cut -c1-16; }
+
+write_loop() { # $1=sig $2=count $3=kind
+  mkdir -p "$(dirname "$LOOP_FILE")"
+  local changed; changed=$(git -C "$REPO" diff --name-only 2>/dev/null | shasum -a 256 | cut -c1-12 || echo "")
+  cat > "$LOOP_FILE" <<JSON
+{
+  "task_slug": "$SLUG",
+  "phase": "$PHASE",
+  "failure_kind": "$3",
+  "last_failure_signature": "$1",
+  "consecutive_same_failure": $2,
+  "max_attempts": $MAX,
+  "changed_files_hash": "$changed",
+  "strategy_reset_ack": false,
+  "updated_at": "$(now)"
+}
+JSON
+}
+
+read_field() { # $1=key  (loop.json から素朴に読む。jq があれば使う)
+  [ -f "$LOOP_FILE" ] || { echo ""; return; }
+  if command -v jq >/dev/null 2>&1; then jq -r ".$1 // \"\"" "$LOOP_FILE" 2>/dev/null; else
+    grep "\"$1\"" "$LOOP_FILE" | head -1 | sed -E 's/.*: *"?([^",}]*)"?.*/\1/'; fi
+}
+
+case "$MODE" in
+  status) [ -f "$LOOP_FILE" ] && cat "$LOOP_FILE" || echo "(no loop state: $LOOP_FILE)"; exit 0 ;;
+  reset)  rm -f "$LOOP_FILE"; echo "ai-run-check: loop state cleared"; exit 0 ;;
+  self-test) : ;;  # 後述
+  run)
+    [ "${#CMD[@]}" -gt 0 ] || { echo "ai-run-check: no command (use -- <command...>)" >&2; exit 64; }
+    ;;
+esac
+
+run_check() {
+  local out rc kind block sig prev_sig prev_cnt cnt
+  # perl/shasum が無い環境では signature 機構を使えないので透明 wrapper として実行のみ(loop 追跡なし)
+  if ! command -v perl >/dev/null 2>&1 || ! command -v shasum >/dev/null 2>&1; then
+    set +e; "${CMD[@]}"; rc=$?; set -e; return "$rc"
+  fi
+  out=$(mktemp /tmp/ai-run-check.XXXXXX)
+  set +e
+  "${CMD[@]}" 2>&1 | tee "$out"
+  rc=${PIPESTATUS[0]}
+  set -e
+  if [ "$rc" -eq 0 ]; then
+    # 成功 → loop をリセット(同一失敗の連鎖を断つ)
+    [ -f "$LOOP_FILE" ] && write_loop "" 0 "" || true
+    rm -f "$out"; return 0
+  fi
+  # 失敗 → 分類・正規化・signature
+  { IFS= read -r kind; block=$(cat); } < <(classify_and_extract "$out")
+  local norm_cmd norm_block
+  norm_cmd=$(printf '%s ' "${CMD[@]}" | normalize)
+  norm_block=$(printf '%s' "$block" | normalize)
+  sig=$(printf '%s\n%s\n%s\n%s' "$norm_cmd" "$rc" "$kind" "$norm_block" | sig_of)
+  prev_sig=$(read_field last_failure_signature)
+  prev_cnt=$(read_field consecutive_same_failure); [ -n "$prev_cnt" ] || prev_cnt=0
+  if [ "$sig" = "$prev_sig" ] && [ -n "$prev_sig" ]; then cnt=$((prev_cnt + 1)); else cnt=1; fi
+  write_loop "$sig" "$cnt" "$kind"
+  if [ "$cnt" -ge "$MAX" ]; then
+    echo "" >&2
+    echo "⚠ ai-run-check: 同じ失敗(kind=$kind, sig=$sig)が ${cnt} 回連続。" >&2
+    echo "  パッチを当て直すループに入っている可能性。決定的な repro/test/harness を作るか、" >&2
+    echo "  仮説を ranked で立て直す(weakest_assumption の falsifiable check)。" >&2
+    echo "  解除: ai-run-check --reset、または別アプローチで失敗内容が変われば自動リセット。" >&2
+  fi
+  rm -f "$out"; return "$rc"
+}
+
+# ================= self-test(実 check コマンドを使わず正規化/ signature 安定性を検証) =================
+if [ "$MODE" = "self-test" ]; then
+  fail=0
+  T=$(mktemp -d /tmp/ai-run-check-st.XXXXXX)
+  export AI_RUN_CHECK_LOOP="$T/loop.json"
+  SLUG=st; PHASE=verify; MAX=3
+
+  # 同一論理失敗(path/pid/timestamp/行番号だけ異なる)→ 同一 signature か
+  A='FAILED tests/test_x.py::test_a - AssertionError at /Users/foo/repo/tests/test_x.py:12:5 pid 48211 2026-06-15T09:00:00Z'
+  B='FAILED tests/test_x.py::test_a - AssertionError at /Users/bar/other/tests/test_x.py:88:9 pid 50999 2026-06-15T11:22:33Z'
+  na=$(printf '%s' "$A" | normalize); nb=$(printf '%s' "$B" | normalize)
+  if [ "$na" = "$nb" ]; then echo "  ok: 正規化が path/pid/time/行番号を吸収"; else
+    echo "  FAIL: 正規化が一致しない"; echo "    a=$na"; echo "    b=$nb"; fail=1; fi
+  sa=$(printf 'cmd\n1\npytest\n%s' "$na" | sig_of); sb=$(printf 'cmd\n1\npytest\n%s' "$nb" | sig_of)
+  [ "$sa" = "$sb" ] && echo "  ok: signature 安定" || { echo "  FAIL: signature 不一致"; fail=1; }
+
+  # 別の失敗 → 異なる signature
+  C='FAILED tests/test_y.py::test_b - ValueError'
+  nc=$(printf '%s' "$C" | normalize); sc=$(printf 'cmd\n1\npytest\n%s' "$nc" | sig_of)
+  [ "$sc" != "$sa" ] && echo "  ok: 別の失敗は別 signature" || { echo "  FAIL: 別失敗が衝突"; fail=1; }
+
+  # カウンタ累積: 同一失敗を2回 → consecutive=2、成功 → 0
+  CMD=(sh -c 'echo "FAILED tests/test_x.py::test_a - AssertionError" >&2; exit 1')
+  run_check >/dev/null 2>&1 || true
+  run_check >/dev/null 2>&1 || true
+  c2=$(read_field consecutive_same_failure)
+  [ "$c2" = "2" ] && echo "  ok: 同一失敗で counter=2" || { echo "  FAIL: counter=$c2 (expected 2)"; fail=1; }
+  CMD=(sh -c 'echo ok; exit 0')
+  run_check >/dev/null 2>&1 || true
+  c3=$(read_field consecutive_same_failure)
+  [ "$c3" = "0" ] && echo "  ok: 成功で counter=0 にリセット" || { echo "  FAIL: counter=$c3 (expected 0)"; fail=1; }
+
+  rm -rf "$T"
+  if [ "$fail" -eq 0 ]; then echo "SELF-TEST: PASS"; exit 0; else echo "SELF-TEST: FAIL"; exit 1; fi
+fi
+
+run_check
