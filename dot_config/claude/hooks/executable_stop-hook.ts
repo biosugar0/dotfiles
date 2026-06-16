@@ -576,6 +576,33 @@ async function main(): Promise<void> {
         }
       }
 
+      // Exponential backoff: メッセージ内容が安定している間は Haiku 評価頻度を下げる
+      // 出力が変化したら即座に評価（進捗があった可能性）
+      if (goalState.iterations > 2) {
+        const hashes = goalState.msgHashes;
+        const msgChanged = hashes.length >= 2 &&
+          hashes[hashes.length - 1] !== hashes[hashes.length - 2];
+
+        if (!msgChanged) {
+          const backoffExp = Math.min(
+            Math.floor(Math.log2(goalState.iterations)),
+            5,
+          ); // cap: 2^5=32
+          const interval = 2 ** backoffExp;
+          if (goalState.iterations % interval !== 0) {
+            await writeGoalState(gPath, goalState);
+            console.log(
+              JSON.stringify({
+                decision: "block",
+                reason:
+                  `[Goal: ${goalState.condition}] 進行中（eval backoff: ${interval}ターン毎）`,
+              }),
+            );
+            Deno.exit(0);
+          }
+        }
+      }
+
       await writeGoalState(gPath, goalState);
     }
 
