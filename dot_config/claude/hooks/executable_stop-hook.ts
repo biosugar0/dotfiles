@@ -642,8 +642,39 @@ async function main(): Promise<void> {
       }
     }
 
-    // 検証状態
+    // evaluator APPROVED → distill-memory 促し
     const projectDir = Deno.env.get("CLAUDE_PROJECT_DIR") ?? Deno.cwd();
+    try {
+      const gatePath = `${projectDir}/ai/state/workflow-gate.json`;
+      const gateContent = await Deno.readTextFile(gatePath);
+      const gate = JSON.parse(gateContent);
+      if (gate.evaluator?.status === "PASS") {
+        const memDir = `${projectDir}/ai/memory`;
+        let hasRecentMemory = false;
+        try {
+          for await (const entry of Deno.readDir(memDir)) {
+            if (entry.isFile && entry.name.endsWith(".md")) {
+              const stat = await Deno.stat(`${memDir}/${entry.name}`);
+              if (stat.mtime && Date.now() - stat.mtime.getTime() < 3600_000) {
+                hasRecentMemory = true;
+                break;
+              }
+            }
+          }
+        } catch {
+          // memory dir doesn't exist yet
+        }
+        if (!hasRecentMemory) {
+          annotations.push(
+            "Evaluator APPROVED: distill-memory skill を発動して教訓を記録してから終了すること。記録すべき教訓がなければスキップ可。",
+          );
+        }
+      }
+    } catch {
+      // workflow-gate なし — 通常動作
+    }
+
+    // 検証状態
     try {
       const verifyPath = `${projectDir}/ai/state/verification.json`;
       const verifyContent = await Deno.readTextFile(verifyPath);
