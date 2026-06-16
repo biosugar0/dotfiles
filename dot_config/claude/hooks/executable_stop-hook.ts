@@ -369,12 +369,11 @@ When an "Active goal" annotation is present, evaluate the condition against tran
 - Do NOT set impossible just because progress is slow
 
 ## Auto-Goal Detection
-When you BLOCK stop (should_stop=false) and no goal is active, set goal_condition ONLY when ALL of:
-- The task is implementation, refactoring, migration, or fix (NOT Q&A, research, exploration, design discussion)
-- A verifiable end state exists (test pass, lint clean, build success, specific output)
-- The user's request implies iterative work toward that state
-Good conditions: "npm test exits with 0 failures", "all lint errors resolved", "all files migrated to new API"
-Do NOT set goal_condition for: questions, simple one-off tasks, tasks without measurable criteria, research/exploration, design discussions, tasks where the user is asking for options or opinions.
+When you BLOCK stop (should_stop=false) and no goal is active, set goal_condition when the task has a clear deliverable or end state that can be verified. This includes:
+- Implementation/fix/refactoring: "all tests pass", "lint clean", "build success"
+- Investigation/research: "root cause identified and reported", "vulnerability list delivered", "research report complete"
+- Migration/review: "all files migrated", "review findings at zero"
+Do NOT set goal_condition for: conversational exchanges (opinions, "どう思う？", "AとBどっちがいい？"), simple one-shot Q&A, design discussions where user judgment is needed at each step.
 If a "Loop hint" annotation is present, you SHOULD set goal_condition.
 
 ## Complex Task Detection
