@@ -38,6 +38,7 @@ interface GoalState {
   iterations: number;
   targetTurns: number | null;
   msgHashes: string[];
+  errorHashes: string[];
 }
 
 const GOAL_CLEAR_RE = /(?:^|\n)\s*\[?goal\s+(?:clear|off|cancel|reset|stop|none)\]?\s*(?:\n|$)/im;
@@ -80,6 +81,8 @@ async function clearGoalState(path: string): Promise<void> {
 
 const TRANSCRIPT_BUDGET_CHARS = 200_000;
 
+const RECENT_DETAIL_COUNT = 20;
+
 export function readTranscriptForGoal(
   transcriptPath: string,
   maxChars = TRANSCRIPT_BUDGET_CHARS,
@@ -101,20 +104,43 @@ export function readTranscriptForGoal(
         }
       }
 
-      const full = formatted.join("\n\n");
+      if (formatted.length <= RECENT_DETAIL_COUNT) {
+        const full = formatted.join("\n\n");
+        if (full.length <= maxChars) return full;
+      }
+
+      // 直近 RECENT_DETAIL_COUNT は詳細、それ以前は圧縮
+      const recentStart = Math.max(0, formatted.length - RECENT_DETAIL_COUNT);
+      const older = formatted.slice(0, recentStart);
+      const recent = formatted.slice(recentStart);
+
+      const compressed = older.map((msg) => {
+        // tool_result は省略し、user/assistant のテキストだけ残す（各100文字まで）
+        if (msg.startsWith("[Tool Output]:")) return null;
+        const firstLine = msg.split("\n")[0];
+        return firstLine.length > 100 ? firstLine.slice(0, 100) + "…" : firstLine;
+      }).filter(Boolean);
+
+      const parts: string[] = [];
+      if (compressed.length > 0) {
+        parts.push(`[Earlier context — ${compressed.length} messages summarized]\n${compressed.join("\n")}`);
+      }
+      parts.push(...recent);
+
+      const full = parts.join("\n\n");
       if (full.length <= maxChars) return full;
 
-      // 末尾を優先して切り詰め
+      // それでも超える場合は末尾優先で切り詰め
       let total = 0;
-      let startIdx = formatted.length;
-      for (let i = formatted.length - 1; i >= 0; i--) {
-        total += formatted[i].length + 2;
+      let startIdx = parts.length;
+      for (let i = parts.length - 1; i >= 0; i--) {
+        total += parts[i].length + 2;
         if (total > maxChars) break;
         startIdx = i;
       }
-      const kept = formatted.slice(startIdx);
-      const dropped = formatted.length - kept.length;
-      return `[Earlier conversation truncated — ${dropped} messages omitted. Evaluate the condition against the recent transcript below; if the required evidence may be in the omitted prefix, return should_stop=false with reason "insufficient evidence in transcript".]\n\n${kept.join("\n\n")}`;
+      const kept = parts.slice(startIdx);
+      const dropped = parts.length - kept.length;
+      return `[Transcript truncated — ${dropped} sections omitted. Evaluate against recent transcript; if evidence may be in omitted prefix, return should_stop=false.]\n\n${kept.join("\n\n")}`;
     } catch {
       return "";
     }
@@ -234,6 +260,22 @@ function truncateHeadTail(text: string, budget: number): string {
   return `${text.slice(0, headSize)}\n…[truncated]…\n${text.slice(-tailSize)}`;
 }
 
+const ERROR_PATTERNS: RegExp[] = [
+  /(?:FAIL|FAILED|ERROR|Error)\s+(.+?)(?:\n|$)/i,
+  /error\[([A-Z0-9_-]+)\]/,
+  /(\d+)\s+(?:failing|failed|errors?)\b/i,
+  /exit\s+(?:code|status)[:\s]+(\d+)/i,
+];
+
+export function extractErrorFingerprint(text: string): string {
+  const matches: string[] = [];
+  for (const re of ERROR_PATTERNS) {
+    const m = text.match(re);
+    if (m) matches.push(m[0].slice(0, 80));
+  }
+  return matches.length ? djb2(matches.sort().join("|")) : "";
+}
+
 function djb2(s: string): string {
   let h = 5381;
   for (let i = 0; i < s.length; i++) {
@@ -327,14 +369,24 @@ When an "Active goal" annotation is present, evaluate the condition against tran
 - Do NOT set impossible just because progress is slow
 
 ## Auto-Goal Detection
-When you BLOCK stop (should_stop=false) and no goal is active, also set goal_condition if the task has a clear, verifiable completion condition not yet met. This activates goal tracking for subsequent turns.
+When you BLOCK stop (should_stop=false) and no goal is active, set goal_condition ONLY when ALL of:
+- The task is implementation, refactoring, migration, or fix (NOT Q&A, research, exploration, design discussion)
+- A verifiable end state exists (test pass, lint clean, build success, specific output)
+- The user's request implies iterative work toward that state
 Good conditions: "npm test exits with 0 failures", "all lint errors resolved", "all files migrated to new API"
-Do NOT set goal_condition for: questions, simple one-off tasks, tasks without measurable criteria.
+Do NOT set goal_condition for: questions, simple one-off tasks, tasks without measurable criteria, research/exploration, design discussions, tasks where the user is asking for options or opinions.
 If a "Loop hint" annotation is present, you SHOULD set goal_condition.
 
 ## Complex Task Detection
-When the task is complex (multi-file changes, multi-round reviews, large refactoring) AND goal is not yet active AND no rubric annotation is present, include in reason: "このタスクはゴール定義が有効。ユーザーに完了条件を確認してから開始すべき。" This prompts Claude to ask the user for clarification before diving into a long loop. Indicators of complexity: multiple acceptance criteria mentioned, "全部", "すべて", review/refactor scope > 5 files.
+When the task is complex (multi-file changes, multi-round reviews, large refactoring) AND goal is not yet active AND no rubric annotation is present, include in reason: "このタスクはゴール定義が有効。ユーザーに完了条件を確認してから開始すべき。" This prompts Claude to ask the user for clarification before diving into a long loop.
 If a "Rubric" annotation IS present, use the rubric content as the goal condition directly.
+
+## Human Intervention Points
+When an active goal is running and the transcript shows any of these, set should_stop=true with reason explaining the blocker:
+- Destructive operations ahead: force push, production deploy, database migration, secret rotation
+- User judgment required: design choice between alternatives, scope decision, priority call
+- Same test/lint failure pattern appearing 3+ times with no new approach
+- Scope drift: work is diverging from the original goal condition
 
 ## done_summary
 When should_stop=true, set done_summary: a 15-40 character Japanese noun phrase of what Claude actually DID. Examples: "認証バグ修正と動作確認", "stop hookにgoal機能追加". Omit when should_stop=false.
@@ -447,6 +499,18 @@ async function main(): Promise<void> {
         goalState.msgHashes = goalState.msgHashes.slice(-10);
       }
 
+      // エラーフィンガープリント追跡（同一エラーパターン3回で stuck 判定）
+      if (!goalState.errorHashes) goalState.errorHashes = [];
+      const errorFp = extractErrorFingerprint(lastMessage);
+      if (errorFp) {
+        goalState.errorHashes.push(errorFp);
+        if (goalState.errorHashes.length > 10) {
+          goalState.errorHashes = goalState.errorHashes.slice(-10);
+        }
+      } else {
+        goalState.errorHashes = [];
+      }
+
       if (goalState.targetTurns && goalState.iterations >= goalState.targetTurns) {
         await clearGoalState(gPath);
         console.log(
@@ -458,6 +522,7 @@ async function main(): Promise<void> {
         Deno.exit(0);
       }
 
+      // 同一出力の空転（5回）
       const spinDetected = detectSpin(goalState.msgHashes);
       if (spinDetected) {
         const spinCount = countConsecutiveIdentical(goalState.msgHashes);
@@ -467,6 +532,21 @@ async function main(): Promise<void> {
             JSON.stringify({
               decision: "block",
               reason: `[Goal: ${goalState.condition}] 空転が ${spinCount} 回連続。ユーザーに状況を報告し、別のアプローチを提案して終了せよ。`,
+            }),
+          );
+          Deno.exit(0);
+        }
+      }
+
+      // 同一エラーパターンの stuck（3回連続）
+      if (detectSpin(goalState.errorHashes.slice(-3)) && goalState.errorHashes.length >= 3) {
+        const errCount = countConsecutiveIdentical(goalState.errorHashes);
+        if (errCount >= 3) {
+          await clearGoalState(gPath);
+          console.log(
+            JSON.stringify({
+              decision: "block",
+              reason: `[Goal: ${goalState.condition}] 同一エラーパターンが ${errCount} 回連続。別のアプローチを試すか、ユーザーに相談して終了せよ。`,
             }),
           );
           Deno.exit(0);
@@ -625,6 +705,7 @@ async function main(): Promise<void> {
       // 継続: ゴール自動抽出
       if (gPath && decision.goal_condition && !goalState) {
         const targetTurns = userRequest ? extractTargetTurns(userRequest) : null;
+        const initErrorFp = extractErrorFingerprint(lastMessage);
         await writeGoalState(gPath, {
           condition: decision.goal_condition,
           userHash: djb2(userRequest || ""),
@@ -632,6 +713,7 @@ async function main(): Promise<void> {
           iterations: 1,
           targetTurns,
           msgHashes: [djb2(lastMessage.slice(0, 500))],
+          errorHashes: initErrorFp ? [initErrorFp] : [],
         });
       }
 
