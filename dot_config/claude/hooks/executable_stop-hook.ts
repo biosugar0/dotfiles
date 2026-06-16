@@ -271,7 +271,10 @@ export function extractErrorFingerprint(text: string): string {
   const matches: string[] = [];
   for (const re of ERROR_PATTERNS) {
     const m = text.match(re);
-    if (m) matches.push(m[0].slice(0, 80));
+    if (m) {
+      if (m[1] === "0") continue;
+      matches.push(m[0].slice(0, 80));
+    }
   }
   return matches.length ? djb2(matches.sort().join("|")) : "";
 }
@@ -356,6 +359,7 @@ Rules:
 - If the user's request was a question and Claude answered it, APPROVE stop
 - If "Verification evidence: FAIL", BLOCK — must fix before completing
 - If "Verification evidence: PASS", factor it positively
+- If "Verification evidence: STALE" or "NONE" and the task involved code changes: assistant's completion claim alone is insufficient. Look for recent [Tool Result] showing test/lint/build pass. If no fresh evidence exists, suggest verification but do not hard-block (docs/config changes may not need it)
 - If "Context health: HIGH USAGE" and work is incomplete, suggest --fork-session
 - Default: approve stop
 
@@ -372,12 +376,12 @@ When an "Active goal" annotation is present, evaluate the condition against tran
 When you BLOCK stop (should_stop=false) and no goal is active, set goal_condition when the task has a clear deliverable or end state that can be verified. This includes:
 - Implementation/fix/refactoring: "all tests pass", "lint clean", "build success"
 - Investigation/research: "root cause identified and reported", "vulnerability list delivered", "research report complete"
-- Migration/review: "all files migrated", "review findings at zero"
+- Migration/review: "all files migrated", "review report delivered" (use "findings at zero" only if user explicitly asked to fix until clean)
 Do NOT set goal_condition for: conversational exchanges (opinions, "どう思う？", "AとBどっちがいい？"), simple one-shot Q&A, design discussions where user judgment is needed at each step.
 If a "Loop hint" annotation is present, you SHOULD set goal_condition.
 
 ## Complex Task Detection
-When the task is complex (multi-file changes, multi-round reviews, large refactoring) AND goal is not yet active AND no rubric annotation is present, include in reason: "このタスクはゴール定義が有効。ユーザーに完了条件を確認してから開始すべき。" This prompts Claude to ask the user for clarification before diving into a long loop.
+When the task is complex (multi-file changes, multi-round reviews, large refactoring) AND goal is not yet active AND no rubric annotation is present: set should_stop=false and include in reason: "このタスクはゴール定義が有効。ユーザーに完了条件を確認してから開始すべき。" Do NOT set should_stop=true in this case — the clarification prompt must reach Claude.
 If a "Rubric" annotation IS present, use the rubric content as the goal condition directly.
 
 ## Human Intervention Points
@@ -510,7 +514,7 @@ async function main(): Promise<void> {
         goalState.errorHashes = [];
       }
 
-      if (goalState.targetTurns && goalState.iterations >= goalState.targetTurns) {
+      if (goalState.targetTurns && goalState.iterations > goalState.targetTurns) {
         await clearGoalState(gPath);
         console.log(
           JSON.stringify({
