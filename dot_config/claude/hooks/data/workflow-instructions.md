@@ -2,7 +2,7 @@
 
 thinkする場合、
 思考は英語で、思考の開始時に"Thinking in English… "で、終了時は回答との境界がわかりやすいように回答の前にthinkingの中で"Okay, I'll begin my response."  とthinkしてから回答を始める。
-常に自分の思考に疑問を持ち、推測に対して待てよそれは正しいか？と慎重によく思考すること。
+推測に依存する前に、前提を known(確認済)/assumed(未確認)/missing(不明)/conflicting(矛盾) に区別せよ。missing/conflicting が判断に必要なら調査、assumed が複数あれば最も脆い1つを優先して検証（全件の事前検証は不要）。
 
 ## Task
 

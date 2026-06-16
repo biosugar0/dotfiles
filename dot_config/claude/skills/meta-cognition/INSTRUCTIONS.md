@@ -20,13 +20,20 @@
 
 ## やること（出力は検証可能な成果物のみ）
 
-1. **feedback loop の有無**: その変更の正否を秒で判定できる決定的なコマンド（test/repro/harness）があるか。
+1. **fact inventory**: この判断・変更に必要な事実を列挙し分類する。
+   - Known: コード/ドキュメント/実行結果で確認済み
+   - Assumed: 読んでないが多分こう（← 危険ゾーン。weakest_assumption の候補）
+   - Missing: 不明だが判断に必要
+   - Conflicting: 矛盾する情報あり
+   - Assumed/Missing/Conflicting は ranked hypotheses の入力にする。step 4 の weakest_assumption で最も脆い1つを選び、その check で Known 化する（全事実の事前検証は不要）。
+   - 全て Known → そのまま次へ。
+2. **feedback loop の有無**: その変更の正否を秒で判定できる決定的なコマンド（test/repro/harness）があるか。
    - 無い → まず repro/test を作る。作れないなら「なぜ作れないか」を1行で述べる。
    - confidence は自己申告でなく **loop の有無**で定義する（loop が無い＝low）。
-2. **ranked hypotheses（3〜5個）**: 単一仮説への固着を避ける。各仮説に **falsifiable prediction** を付ける。
+3. **ranked hypotheses（3〜5個）**: 単一仮説への固着を避ける。各仮説に **falsifiable prediction** を付ける。
    - 形式: 「X が原因なら、Y を実行すれば Z になる（ならなければ X は否定される）」。
-3. **weakest_assumption**: 一番崩れやすい前提を1つ挙げ、それを否定しにいく **disconfirming check** を選ぶ。
-4. 確認したら、その check を**実行**して結果で進む。確証バイアスでなく否定を試みる。
+4. **weakest_assumption**: 一番崩れやすい前提を1つ挙げ、それを否定しにいく **disconfirming check** を選ぶ。
+5. 確認したら、その check を**実行**して結果で進む。確証バイアスでなく否定を試みる。
 
 ## ⚠ 出力規律（重要・Fable 5 の reasoning_extraction footgun 回避）
 
