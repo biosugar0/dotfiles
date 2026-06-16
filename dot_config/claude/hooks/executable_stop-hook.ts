@@ -3,9 +3,9 @@
 import Anthropic from "npm:@anthropic-ai/sdk";
 import { readAll } from "jsr:@std/io@0.224/read-all";
 import {
-  resolveAnthropicAuth,
-  isRealUserMessage,
   extractTextFromContent,
+  isRealUserMessage,
+  resolveAnthropicAuth,
 } from "./lib/session-context.ts";
 
 interface StopHookInput {
@@ -41,8 +41,10 @@ interface GoalState {
   errorHashes: string[];
 }
 
-const GOAL_CLEAR_RE = /(?:^|\n)\s*\[?goal\s+(?:clear|off|cancel|reset|stop|none)\]?\s*(?:\n|$)/im;
-const GOAL_CLEAR_JA_RE = /(?:^|\n)\s*(?:ゴール(?:解除|クリア|オフ|キャンセル|リセット))\s*(?:\n|$)/;
+const GOAL_CLEAR_RE =
+  /(?:^|\n)\s*\[?goal\s+(?:clear|off|cancel|reset|stop|none)\]?\s*(?:\n|$)/im;
+const GOAL_CLEAR_JA_RE =
+  /(?:^|\n)\s*(?:ゴール(?:解除|クリア|オフ|キャンセル|リセット))\s*(?:\n|$)/;
 
 export function detectGoalClear(text: string): boolean {
   if (!text) return false;
@@ -118,12 +120,18 @@ export function readTranscriptForGoal(
         // tool_result は省略し、user/assistant のテキストだけ残す（各100文字まで）
         if (msg.startsWith("[Tool Output]:")) return null;
         const firstLine = msg.split("\n")[0];
-        return firstLine.length > 100 ? firstLine.slice(0, 100) + "…" : firstLine;
+        return firstLine.length > 100
+          ? firstLine.slice(0, 100) + "…"
+          : firstLine;
       }).filter(Boolean);
 
       const parts: string[] = [];
       if (compressed.length > 0) {
-        parts.push(`[Earlier context — ${compressed.length} messages summarized]\n${compressed.join("\n")}`);
+        parts.push(
+          `[Earlier context — ${compressed.length} messages summarized]\n${
+            compressed.join("\n")
+          }`,
+        );
       }
       parts.push(...recent);
 
@@ -140,7 +148,9 @@ export function readTranscriptForGoal(
       }
       const kept = parts.slice(startIdx);
       const dropped = parts.length - kept.length;
-      return `[Transcript truncated — ${dropped} sections omitted. Evaluate against recent transcript; if evidence may be in omitted prefix, return should_stop=false.]\n\n${kept.join("\n\n")}`;
+      return `[Transcript truncated — ${dropped} sections omitted. Evaluate against recent transcript; if evidence may be in omitted prefix, return should_stop=false.]\n\n${
+        kept.join("\n\n")
+      }`;
     } catch {
       return "";
     }
@@ -161,11 +171,11 @@ function formatTranscriptEntry(entry: TranscriptEntry): string | null {
           const resultText = typeof block.content === "string"
             ? block.content
             : Array.isArray(block.content)
-              ? block.content
-                  .filter((b) => b.type === "text" && b.text)
-                  .map((b) => b.text!)
-                  .join("\n")
-              : "";
+            ? block.content
+              .filter((b) => b.type === "text" && b.text)
+              .map((b) => b.text!)
+              .join("\n")
+            : "";
           if (resultText.trim()) {
             parts.push(`[Tool Result]: ${truncateHeadTail(resultText, 500)}`);
           }
@@ -468,7 +478,9 @@ async function main(): Promise<void> {
     const lastMessage = input.last_assistant_message || "";
 
     // ─── Goal 状態管理 ───
-    const gPath = input.transcript_path ? goalStatePath(input.transcript_path) : null;
+    const gPath = input.transcript_path
+      ? goalStatePath(input.transcript_path)
+      : null;
 
     if (gPath && userRequest && detectGoalClear(userRequest)) {
       await clearGoalState(gPath);
@@ -514,12 +526,15 @@ async function main(): Promise<void> {
         goalState.errorHashes = [];
       }
 
-      if (goalState.targetTurns && goalState.iterations > goalState.targetTurns) {
+      if (
+        goalState.targetTurns && goalState.iterations > goalState.targetTurns
+      ) {
         await clearGoalState(gPath);
         console.log(
           JSON.stringify({
             decision: "block",
-            reason: `[Goal: ${goalState.condition}] ターン上限 ${goalState.targetTurns} に到達。進捗状況と未達点をユーザーに報告して終了せよ。`,
+            reason:
+              `[Goal: ${goalState.condition}] ターン上限 ${goalState.targetTurns} に到達。進捗状況と未達点をユーザーに報告して終了せよ。`,
           }),
         );
         Deno.exit(0);
@@ -534,7 +549,8 @@ async function main(): Promise<void> {
           console.log(
             JSON.stringify({
               decision: "block",
-              reason: `[Goal: ${goalState.condition}] 空転が ${spinCount} 回連続。ユーザーに状況を報告し、別のアプローチを提案して終了せよ。`,
+              reason:
+                `[Goal: ${goalState.condition}] 空転が ${spinCount} 回連続。ユーザーに状況を報告し、別のアプローチを提案して終了せよ。`,
             }),
           );
           Deno.exit(0);
@@ -542,14 +558,18 @@ async function main(): Promise<void> {
       }
 
       // 同一エラーパターンの stuck（3回連続）
-      if (detectSpin(goalState.errorHashes.slice(-3)) && goalState.errorHashes.length >= 3) {
+      if (
+        detectSpin(goalState.errorHashes.slice(-3)) &&
+        goalState.errorHashes.length >= 3
+      ) {
         const errCount = countConsecutiveIdentical(goalState.errorHashes);
         if (errCount >= 3) {
           await clearGoalState(gPath);
           console.log(
             JSON.stringify({
               decision: "block",
-              reason: `[Goal: ${goalState.condition}] 同一エラーパターンが ${errCount} 回連続。別のアプローチを試すか、ユーザーに相談して終了せよ。`,
+              reason:
+                `[Goal: ${goalState.condition}] 同一エラーパターンが ${errCount} 回連続。別のアプローチを試すか、ユーザーに相談して終了せよ。`,
             }),
           );
           Deno.exit(0);
@@ -580,10 +600,14 @@ async function main(): Promise<void> {
     // ゴール
     if (goalState) {
       const spinDetected = detectSpin(goalState.msgHashes);
-      const spinCount = spinDetected ? countConsecutiveIdentical(goalState.msgHashes) : 0;
-      let goalNote = `Active goal（${goalState.iterations}ターン目）: ${goalState.condition}`;
+      const spinCount = spinDetected
+        ? countConsecutiveIdentical(goalState.msgHashes)
+        : 0;
+      let goalNote =
+        `Active goal（${goalState.iterations}ターン目）: ${goalState.condition}`;
       if (spinDetected) {
-        goalNote += `\n⚠️ SPIN WARNING: ${spinCount}回連続で同様の出力。アプローチ変更が必要。`;
+        goalNote +=
+          `\n⚠️ SPIN WARNING: ${spinCount}回連続で同様の出力。アプローチ変更が必要。`;
       }
       annotations.push(goalNote);
     }
@@ -640,7 +664,9 @@ async function main(): Promise<void> {
       if (verify.head_sha === currentSha && verify.status === "PASS") {
         annotations.push("Verification evidence: PASS (fresh, matching HEAD)");
       } else if (verify.head_sha !== currentSha) {
-        annotations.push("Verification evidence: STALE (HEAD changed since verification)");
+        annotations.push(
+          "Verification evidence: STALE (HEAD changed since verification)",
+        );
       } else {
         annotations.push(`Verification evidence: ${verify.status}`);
       }
@@ -661,7 +687,9 @@ async function main(): Promise<void> {
         const healthContent = await Deno.readTextFile(healthFile);
         const health = JSON.parse(healthContent);
         if (health.context_pct >= 85) {
-          annotations.push(`Context health: HIGH USAGE (${health.context_pct}%) — consider --fork-session`);
+          annotations.push(
+            `Context health: HIGH USAGE (${health.context_pct}%) — consider --fork-session`,
+          );
         } else if (health.context_pct >= 70) {
           annotations.push(`Context health: ELEVATED (${health.context_pct}%)`);
         }
@@ -684,7 +712,9 @@ async function main(): Promise<void> {
       messages: [
         {
           role: "user",
-          content: `<transcript>\n${transcript || lastMessage}\n</transcript>${annotationBlock}`,
+          content: `<transcript>\n${
+            transcript || lastMessage
+          }\n</transcript>${annotationBlock}`,
         },
       ],
     });
@@ -707,7 +737,9 @@ async function main(): Promise<void> {
     } else {
       // 継続: ゴール自動抽出
       if (gPath && decision.goal_condition && !goalState) {
-        const targetTurns = userRequest ? extractTargetTurns(userRequest) : null;
+        const targetTurns = userRequest
+          ? extractTargetTurns(userRequest)
+          : null;
         const initErrorFp = extractErrorFingerprint(lastMessage);
         await writeGoalState(gPath, {
           condition: decision.goal_condition,
@@ -726,8 +758,8 @@ async function main(): Promise<void> {
           reason: decision.goal_condition && !goalState
             ? `[Goal set: ${decision.goal_condition}] ${decision.reason}`
             : goalState
-              ? `[Goal: ${goalState.condition}] ${decision.reason}`
-              : decision.reason || "タスクが未完了",
+            ? `[Goal: ${goalState.condition}] ${decision.reason}`
+            : decision.reason || "タスクが未完了",
         }),
       );
     }
