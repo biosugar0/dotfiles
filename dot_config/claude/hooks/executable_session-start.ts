@@ -11,6 +11,7 @@ import Anthropic from "npm:@anthropic-ai/sdk";
 import { readAll } from "jsr:@std/io@0.224/read-all";
 import {
   getGitBranch,
+  getGitShortHead,
   resolveAnthropicAuth,
 } from "./lib/session-context.ts";
 
@@ -97,20 +98,6 @@ Rules:
 - Output in Japanese
 
 Call compact_supplement with your analysis.`;
-
-async function getGitShortHead(projectDir: string): Promise<string> {
-  try {
-    const { stdout } = await new Deno.Command("git", {
-      args: ["rev-parse", "--short", "HEAD"],
-      stdout: "piped",
-      stderr: "null",
-      cwd: projectDir,
-    }).output();
-    return new TextDecoder().decode(stdout).trim();
-  } catch {
-    return "";
-  }
-}
 
 async function buildResumeContext(projectDir: string, sessionId: string): Promise<string> {
   try {
