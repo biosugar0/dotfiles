@@ -4,6 +4,8 @@ import Anthropic from "npm:@anthropic-ai/sdk";
 import { readAll } from "jsr:@std/io@0.224/read-all";
 import {
   extractTextFromContent,
+  getGitDirtyCount,
+  getGitShortHead,
   isRealUserMessage,
   resolveAnthropicAuth,
 } from "./lib/session-context.ts";
@@ -265,6 +267,52 @@ export function extractTargetTurns(text: string): number | null {
   return null;
 }
 
+// ─── ゴール分類（actor / reactor）───
+
+/**
+ * ゴール条件が「Claude 自身がローカル検証で達成を確認できる通過系（actor）」か判定する。
+ * true の場合、out-of-band の verification.json の fresh PASS を達成の決定的証拠として
+ * Haiku 判定を短絡できる（案A）。test/lint/build/type/compile 等のローカル検証名詞で判定。
+ */
+const VERIFIABLE_GOAL_PATTERNS: RegExp[] = [
+  /\b(?:unit\s+)?tests?\b/i,
+  /\blint(?:ing)?\b/i,
+  /\bbuild\b/i,
+  /\b(?:typecheck|type[-\s]?check|tsc|compil(?:es?|ed|ing|ation))\b/i,
+  /\bcoverage\b/i,
+  /(?:テスト|型(?:チェック|検査)?|ビルド|リント|コンパイル)/,
+];
+
+export function classifyVerifiableGoal(condition: string): boolean {
+  if (!condition) return false;
+  return VERIFIABLE_GOAL_PATTERNS.some((re) => re.test(condition));
+}
+
+/**
+ * ゴール条件が「外部システムが駆動する完了条件（reactor）」か判定する。
+ * true の場合、stop-gate での busy-loop ではなく Monitor ツールでの監視に委ねるべき（案B）。
+ * CI/デプロイ/パイプライン/ジョブ/PRマージ/リリース等。reactor は actor より優先する。
+ */
+// 注: bare な環境名詞(production/staging/canary)は actor goal や git の staging area と
+// 衝突するため含めない。CI は「CI run/job/pass 等」の完了文脈に限定する。最終的な actor/reactor
+// 優先は呼び出し側で classifyVerifiableGoal を優先させて解決する(verifiable が勝つ)。
+const REACTOR_GOAL_PATTERNS: RegExp[] = [
+  /\bci\s+(?:run|builds?|jobs?|pipelines?|checks?|passes?|green|completes?|succeed(?:s|ed)?)\b/i,
+  /\b(?:wait(?:ing)?\s+(?:for|on)|until|once|after)\s+ci\b/i,
+  /\b(?:deploy(?:ment|s|ed|ing)?|rollout|releas(?:e|ed|es|ing))\b/i,
+  /\b(?:pipeline|workflow\s+run|gh\s+actions?|github\s+actions?)\b/i,
+  /\b(?:pr|pull\s+request)\b[\s\S]{0,30}\b(?:merg|review|approv|check)/i,
+  /\b(?:merg(?:e|ed|ing)|approv(?:al|ed|e))\b/i,
+  /(?:デプロイ|リリース|本番|ステージング|パイプライン|ロールアウト|カナリア)/,
+  /(?:CI|ジョブ|ワークフロー|アクション)\s*(?:が|の|を)?\s*(?:完了|終了|green|グリーン|通(?:る|過)|成功|パス|済)/i,
+  /(?:マージ|レビュー|承認)\s*(?:が|を|の)?\s*(?:完了|され|待|済|通)/,
+];
+
+export function detectReactorGoal(condition: string): boolean {
+  if (!condition) return false;
+  return REACTOR_GOAL_PATTERNS.some((re) => re.test(condition));
+}
+
 // ─── バックグラウンドタスク待機検出 ───
 
 const WAITING_PATTERNS: RegExp[] = [
@@ -470,6 +518,7 @@ Constraints on goal_condition:
 - ONLY include conditions Claude can autonomously verify (test output, lint result, build exit code). Never include human actions (PR merge, deploy approval, manual review).
 - Prefer the NEXT verifiable milestone, not the final outcome. "PR created" not "PR merged and deployed".
 - If the assistant is waiting for a background task (Workflow, Agent, Monitor) to complete, APPROVE stop — the notification mechanism will re-invoke Claude automatically. Do NOT set a goal for waiting.
+- REACTOR conditions: if the completion condition is driven by an EXTERNAL system Claude does not control — CI result, deploy/rollout/release completion, pipeline or job finishing, PR merge/review/approval, production rollout — do NOT set goal_condition. Set should_stop=true and in reason recommend arming a Monitor (e.g. a \`gh pr checks <n>\` poll that emits on terminal state and then exits) so its notification re-invokes Claude. Polling such conditions through the stop-gate busy-loops and wastes turns. (Local test/lint/build/typecheck are NOT reactor — those are actor goals Claude drives itself.)
 
 ## Complex Task Detection
 When the task is complex (multi-file changes, multi-round reviews, large refactoring) AND goal is not yet active AND no rubric annotation is present: set should_stop=false and include in reason: "このタスクはゴール定義が有効。ユーザーに完了条件を確認してから開始すべき。" Do NOT set should_stop=true in this case — the clarification prompt must reach Claude.
@@ -548,6 +597,47 @@ function notifyStop(summary: string): void {
   }
 }
 
+// ─── 検証 receipt（verification.json）の鮮度付き読取 ───
+
+type VerifyStatus = "PASS" | "FAIL" | "STALE" | "NONE";
+
+interface VerifyResult {
+  status: VerifyStatus;
+  rawStatus: string | null; // receipt.status を生で保持（annotation の status 区別用）
+  verifiedAtMs: number | null; // Date.parse(verified_at)。goal との時間相関判定に使う
+}
+
+/**
+ * ai/state/verification.json を読み、現在 HEAD と head_sha を照合して鮮度判定する。
+ * - PASS: status=PASS（大小無視で正規化）かつ head_sha が現在 HEAD と一致（鮮度確認済）
+ * - FAIL: head_sha 一致だが status!=PASS（rawStatus に生の値を残す）
+ * - STALE: head_sha 不一致、または sha 取得不能（空文字 collision を防ぐ）
+ * - NONE: receipt なし／読取不可
+ * rawStatus / verifiedAtMs は短絡判定(verified_at>=setAt)と annotation の status 区別に使う。
+ */
+async function getVerificationStatus(projectDir: string): Promise<VerifyResult> {
+  try {
+    const verifyContent = await Deno.readTextFile(
+      `${projectDir}/ai/state/verification.json`,
+    );
+    const verify = JSON.parse(verifyContent);
+    const rawStatus = typeof verify.status === "string" ? verify.status : null;
+    const parsed = typeof verify.verified_at === "string"
+      ? Date.parse(verify.verified_at)
+      : NaN;
+    const verifiedAtMs = Number.isNaN(parsed) ? null : parsed;
+    const sha = await getGitShortHead(projectDir);
+    // sha 取得不能(空)や head_sha 空は鮮度を確立できない → STALE（決定的短絡をさせない）
+    if (!sha || !verify.head_sha || verify.head_sha !== sha) {
+      return { status: "STALE", rawStatus, verifiedAtMs };
+    }
+    const pass = (rawStatus ?? "").trim().toUpperCase() === "PASS";
+    return { status: pass ? "PASS" : "FAIL", rawStatus, verifiedAtMs };
+  } catch {
+    return { status: "NONE", rawStatus: null, verifiedAtMs: null };
+  }
+}
+
 async function main(): Promise<void> {
   try {
     const raw = new TextDecoder().decode(await readAll(Deno.stdin));
@@ -557,6 +647,13 @@ async function main(): Promise<void> {
       ? await getLastUserRequest(input.transcript_path)
       : null;
     const lastMessage = input.last_assistant_message || "";
+    const projectDir = Deno.env.get("CLAUDE_PROJECT_DIR") ?? Deno.cwd();
+
+    // verification receipt は最大1回だけ読む（短絡判定と annotation で共有）。
+    // 早期 exit パス(background待機/stop_hook_active)では呼ばれず git コストを払わない。
+    let _verify: VerifyResult | null = null;
+    const getVerify = async (): Promise<VerifyResult> =>
+      _verify ??= await getVerificationStatus(projectDir);
 
     // ─── Goal 状態管理 ───
     const gPath = input.transcript_path
@@ -625,6 +722,7 @@ async function main(): Promise<void> {
       if (
         goalState.targetTurns && goalState.iterations > goalState.targetTurns
       ) {
+        notifyStop("ゴール中断: ターン上限到達");
         await clearGoalState(gPath);
         console.log(
           JSON.stringify({
@@ -641,6 +739,7 @@ async function main(): Promise<void> {
       if (spinDetected) {
         const spinCount = countConsecutiveIdentical(goalState.msgHashes);
         if (spinCount >= 5) {
+          notifyStop("ゴール中断: 空転検知");
           await clearGoalState(gPath);
           console.log(
             JSON.stringify({
@@ -660,6 +759,7 @@ async function main(): Promise<void> {
       ) {
         const errCount = countConsecutiveIdentical(goalState.errorHashes);
         if (errCount >= 3) {
+          notifyStop("ゴール中断: 同一エラー反復");
           await clearGoalState(gPath);
           console.log(
             JSON.stringify({
@@ -669,6 +769,30 @@ async function main(): Promise<void> {
             }),
           );
           Deno.exit(0);
+        }
+      }
+
+      // ─── 案A: actor ゴールは verification receipt の fresh PASS で決定的に短絡 ───
+      // Haiku のトランスクリプト推測判定を排し、out-of-band の verify receipt で決定的に停止する。
+      // 偽停止を防ぐため次を全て要求する:
+      //  - status PASS（head_sha が現在 HEAD と一致＝鮮度確認済）
+      //  - receipt がこのゴール設定後に生成された（verified_at >= setAt; 旧タスクの receipt 流用を排除）
+      //  - working tree clean（receipt 後の未コミット編集で壊れていない; ai/ は gitignore 済で dirty 計上外）
+      // 1つでも欠ければ短絡せず Haiku 判定にフォールバックする。reactor 条件は対象外。
+      if (
+        classifyVerifiableGoal(goalState.condition) &&
+        !detectReactorGoal(goalState.condition)
+      ) {
+        const v = await getVerify();
+        const freshForGoal = v.verifiedAtMs !== null &&
+          v.verifiedAtMs >= goalState.setAt;
+        if (v.status === "PASS" && freshForGoal) {
+          const dirty = await getGitDirtyCount(projectDir);
+          if (dirty === 0) {
+            notifyStop(`検証通過: ${goalState.condition}`);
+            await clearGoalState(gPath);
+            Deno.exit(0); // stop を許可（決定的にゴール達成）
+          }
         }
       }
 
@@ -766,7 +890,6 @@ async function main(): Promise<void> {
     }
 
     // evaluator APPROVED → distill-memory 促し
-    const projectDir = Deno.env.get("CLAUDE_PROJECT_DIR") ?? Deno.cwd();
     try {
       const gatePath = `${projectDir}/ai/state/workflow-gate.json`;
       const gateContent = await Deno.readTextFile(gatePath);
@@ -797,36 +920,17 @@ async function main(): Promise<void> {
       // workflow-gate なし — 通常動作
     }
 
-    // 検証状態
-    try {
-      const verifyPath = `${projectDir}/ai/state/verification.json`;
-      const verifyContent = await Deno.readTextFile(verifyPath);
-      const verify = JSON.parse(verifyContent);
-      const currentSha = await (async () => {
-        try {
-          const { stdout } = await new Deno.Command("git", {
-            args: ["rev-parse", "--short", "HEAD"],
-            stdout: "piped",
-            stderr: "null",
-            cwd: projectDir,
-          }).output();
-          return new TextDecoder().decode(stdout).trim();
-        } catch {
-          return "";
-        }
-      })();
-      if (verify.head_sha === currentSha && verify.status === "PASS") {
-        annotations.push("Verification evidence: PASS (fresh, matching HEAD)");
-      } else if (verify.head_sha !== currentSha) {
-        annotations.push(
-          "Verification evidence: STALE (HEAD changed since verification)",
-        );
-      } else {
-        annotations.push(`Verification evidence: ${verify.status}`);
-      }
-    } catch {
-      annotations.push("Verification evidence: NONE");
-    }
+    // 検証状態（getVerify に集約。短絡判定と同一 receipt を共有。FAIL は生 status を保持）
+    const vres = await getVerify();
+    annotations.push(
+      vres.status === "PASS"
+        ? "Verification evidence: PASS (fresh, matching HEAD)"
+        : vres.status === "STALE"
+        ? "Verification evidence: STALE (HEAD changed since verification)"
+        : vres.status === "FAIL"
+        ? `Verification evidence: ${vres.rawStatus ?? "FAIL"}`
+        : "Verification evidence: NONE",
+    );
 
     // コンテキスト健全性
     try {
@@ -891,6 +995,22 @@ async function main(): Promise<void> {
     } else {
       // 継続: ゴール自動抽出
       if (gPath && decision.goal_condition && !goalState) {
+        // 案B: 外部駆動条件は busy-loop gate 化せず Monitor へ誘導（Haiku が見落とした場合の保険）。
+        // actor(ローカル検証可能)を優先: "production build"/"release build" 等の混在語は
+        // reactor 誤判定させず actor として goal 追跡する。
+        if (
+          detectReactorGoal(decision.goal_condition) &&
+          !classifyVerifiableGoal(decision.goal_condition)
+        ) {
+          console.log(
+            JSON.stringify({
+              decision: "block",
+              reason:
+                `[外部駆動: ${decision.goal_condition}] この完了条件は外部システム（CI/デプロイ/ジョブ等）が駆動する。stop-gate でのポーリングはターンを浪費する。Monitor ツールで監視スクリプト（例: 'gh pr checks <n>' を terminal state で emit して exit）を arm し、event 到来で対応せよ。監視を arm したら停止してよい。`,
+            }),
+          );
+          Deno.exit(0);
+        }
         const targetTurns = userRequest
           ? extractTargetTurns(userRequest)
           : null;

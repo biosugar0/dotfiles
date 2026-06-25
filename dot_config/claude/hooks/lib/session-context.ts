@@ -99,6 +99,21 @@ export async function getGitBranch(cwd?: string): Promise<string> {
   }
 }
 
+export async function getGitShortHead(cwd?: string): Promise<string> {
+  try {
+    const opts = cwd ? { cwd } : undefined;
+    const { stdout } = await new Deno.Command("git", {
+      args: ["rev-parse", "--short", "HEAD"],
+      stdout: "piped",
+      stderr: "null",
+      ...opts,
+    }).output();
+    return new TextDecoder().decode(stdout).trim();
+  } catch {
+    return "";
+  }
+}
+
 export async function getGitHeadSha(cwd?: string): Promise<string> {
   try {
     const opts = cwd ? { cwd } : undefined;
