@@ -12,3 +12,4 @@
 - 確信がない場合や興味が出た事項については許可を取らず積極的にweb searchして調査すること
 - PR作成時にはdraft PRで作成すること
 - マージは人間に依頼すること
+- ユーザーへの質問はsub agentでなくmain session でAskUserQuestionToolを使うこと

@@ -18,8 +18,10 @@ interface ContentBlock {
   type: string;
   text?: string;
   name?: string;
+  id?: string;
   input?: Record<string, unknown>;
   content?: string | Array<{ type: string; text?: string }>;
+  tool_use_id?: string;
 }
 
 interface TranscriptEntry {
@@ -263,6 +265,80 @@ export function extractTargetTurns(text: string): number | null {
   return null;
 }
 
+// ─── バックグラウンドタスク待機検出 ───
+
+const WAITING_PATTERNS: RegExp[] = [
+  /\b(?:waiting|wait)\s+(?:for|on)\s+(?:the\s+)?(?:background|notification|completion|result)/i,
+  /\brunning\s+in\s+(?:the\s+)?background\b/i,
+  /\bwill\s+be\s+(?:automatically\s+)?notified\s+when\b/i,
+  /\btask.notification\b/i,
+  /(?:完了|結果|通知)(?:を|の)(?:待[つちっ]|待機)/,
+  /バックグラウンド(?:で|に|の|タスク|処理|実行)/,
+  /(?:ワークフロー|workflow|エージェント|agent|タスク).*(?:実行中|進行中|処理中)/i,
+  /(?:完了|終了)(?:したら|次第|を待)/,
+  /通知(?:が届|を待|待ち)/,
+];
+
+export function isWaitingForBackground(text: string): boolean {
+  return !!text && WAITING_PATTERNS.some((re) => re.test(text));
+}
+
+const BACKGROUND_TOOL_NAMES = new Set(["Agent", "Workflow", "Monitor"]);
+
+/**
+ * 直近のassistantメッセージにバックグラウンドツール呼び出しが含まれ、
+ * かつその後にreal userメッセージ(stop-hook feedbackでない)が来ていなければ true。
+ * Background toolはtool_resultが即座に返るためID照合では検出できない。
+ */
+export async function hasRecentBackgroundToolCalls(
+  transcriptPath: string,
+): Promise<boolean> {
+  try {
+    const content = await Deno.readTextFile(transcriptPath);
+    const lines = content.trimEnd().split("\n");
+
+    let foundRealUserAfterAssistant = false;
+
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const entry: TranscriptEntry = JSON.parse(lines[i]);
+        if (!entry.message?.content || !Array.isArray(entry.message.content)) {
+          continue;
+        }
+
+        if (entry.type === "user") {
+          if (isRealUserMessage(entry.message.content)) {
+            foundRealUserAfterAssistant = true;
+            break;
+          }
+        } else if (entry.type === "assistant") {
+          if (foundRealUserAfterAssistant) break;
+          for (const block of entry.message.content) {
+            if (
+              block.type === "tool_use" &&
+              BACKGROUND_TOOL_NAMES.has(block.name ?? "")
+            ) {
+              if (
+                block.name === "Agent" &&
+                !block.input?.run_in_background
+              ) {
+                continue;
+              }
+              return true;
+            }
+          }
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function truncateHeadTail(text: string, budget: number): string {
   if (text.length <= budget) return text;
   const headSize = Math.floor(budget * 0.6);
@@ -502,6 +578,21 @@ async function main(): Promise<void> {
       Deno.exit(0);
     }
     if (!lastMessage) {
+      Deno.exit(0);
+    }
+
+    // ─── バックグラウンドタスク待機検出 ───
+    // task-notification 機構が完了時に Claude を再起動するため、待機中は stop を許可。
+    // Goal state は保持し、再起動後に評価を再開する。
+    const waitingByText = isWaitingForBackground(lastMessage);
+    const waitingByTranscript = input.transcript_path
+      ? await hasRecentBackgroundToolCalls(input.transcript_path)
+      : false;
+
+    if (waitingByText || waitingByTranscript) {
+      if (goalState && gPath) {
+        await writeGoalState(gPath, goalState);
+      }
       Deno.exit(0);
     }
 
