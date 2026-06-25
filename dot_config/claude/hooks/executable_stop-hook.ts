@@ -466,6 +466,11 @@ When you BLOCK stop (should_stop=false) and no goal is active, set goal_conditio
 Do NOT set goal_condition for: conversational exchanges (opinions, "どう思う？", "AとBどっちがいい？"), simple one-shot Q&A, design discussions where user judgment is needed at each step.
 If a "Loop hint" annotation is present, you SHOULD set goal_condition.
 
+Constraints on goal_condition:
+- ONLY include conditions Claude can autonomously verify (test output, lint result, build exit code). Never include human actions (PR merge, deploy approval, manual review).
+- Prefer the NEXT verifiable milestone, not the final outcome. "PR created" not "PR merged and deployed".
+- If the assistant is waiting for a background task (Workflow, Agent, Monitor) to complete, APPROVE stop — the notification mechanism will re-invoke Claude automatically. Do NOT set a goal for waiting.
+
 ## Complex Task Detection
 When the task is complex (multi-file changes, multi-round reviews, large refactoring) AND goal is not yet active AND no rubric annotation is present: set should_stop=false and include in reason: "このタスクはゴール定義が有効。ユーザーに完了条件を確認してから開始すべき。" Do NOT set should_stop=true in this case — the clarification prompt must reach Claude.
 If a "Rubric" annotation IS present, use the rubric content as the goal condition directly.
