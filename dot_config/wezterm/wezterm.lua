@@ -18,6 +18,10 @@ end)
 config.audible_bell = 'Disabled'
 config.scrollback_lines = 100000
 config.use_dead_keys = false
+-- パスワード入力検知を無効化。
+-- tmux の raw モード(echo off)を「パスワード入力中」と誤検知し、
+-- macOS Secure Input を掴んだままにする挙動を防ぐ(AeroSpace のホットキー奪取対策)。
+config.detect_password_input = false
 config.front_end = 'WebGpu'
 config.adjust_window_size_when_changing_font_size = true
 
