@@ -93,23 +93,25 @@ NG: Agent の報告を信頼
 
 ## 検証 Receipt の記録
 
-検証完了後、以下のコマンドで receipt を記録する（stop-hook が参照する）:
+receipt(`ai/state/verification.json`、stop-hook が短絡判断に参照)は **`ai-run-check --write-receipt`**
+が検証コマンドの **実 exit code から機械生成** する。receipt は手書きせず ai-run-check に生成させる。
 
 ```bash
-mkdir -p ai/state
-cat > ai/state/verification.json << VERIFY
-{
-  "head_sha": "$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')",
-  "verified_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "status": "{PASS|FAIL}",
-  "evidence": [
-    "{実行したコマンドと結果の要約}"
-  ]
-}
-VERIFY
+ai-run-check --write-receipt -- <検証コマンド>
+# 例:
+ai-run-check --write-receipt -- npm test
+ai-run-check --write-receipt -- deno check hooks/executable_stop-hook.ts
 ```
 
-- PASS: 全検証項目が証拠付きで確認された
-- FAIL: 1つ以上の検証が失敗
+- `status` はコマンドの exit code から機械的に決まる（`0`=PASS / それ以外=FAIL）。`head_sha` / `verified_at` /
+  `written_by:"ai-run-check"` を含む。HEAD が変われば古い receipt は無効。
+- 複数コマンドを検証する場合は、最後に**全部入りの1コマンド**(`sh -c 'cmd1 && cmd2 && ...'`)で receipt を生成する。
+  途中で1つでも失敗すれば exit 非0 → FAIL になる。
+- **手書き(`cat > ai/state/verification.json` 等)は pre-tool-use guard でブロックされる**
+  （verifier-gaming = 本当は失敗なのに PASS を書く、を防ぐため。receipt の書き込み主体を ai-run-check に集約する）。
 
-**receipt は検証のたびに上書きする。** HEAD が変わったら古い receipt は無効。
+> なぜ手書きを排すか: 調査により「検証は外部・決定的シグナルで行い、モデルの自己判断に任せると premature done /
+> false PASS が起きる」ことが確認されている。receipt は **渡したコマンドの実 exit code** に束縛され、実行した
+> literal コマンドが evidence に自動記録される(監査可能)。ただし receipt が証明するのは「記録コマンドが exit 0 した」
+> ことだけで、真の検証スイートが走った保証ではない — `--write-receipt -- true` のような no-op を渡さず、必ず本物の
+> 検証コマンド(npm test / deno check / pytest 等)を渡すこと。
