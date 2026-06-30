@@ -1,5 +1,4 @@
 tap "aquaproj/aqua"
-tap "felixkratz/formulae"
 tap "nikitabobko/tap"
 tap "datadog-labs/pack"
 tap "warashi/tap"
@@ -15,7 +14,6 @@ brew "wget"
 
 # Shell & Terminal
 brew "bat"
-brew "felixkratz/formulae/borders"
 brew "eza"
 brew "fd"
 brew "fzf"
@@ -72,7 +70,7 @@ cask "notion"
 cask "obsidian"
 cask "tableplus"
 cask "visual-studio-code"
-cask "wezterm"
+cask "wezterm@nightly"
 
 # Casks - Cloud
 cask "gcloud-cli"
