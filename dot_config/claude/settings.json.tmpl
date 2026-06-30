@@ -231,6 +231,16 @@
             "type": "command",
             "command": "$HOME/.config/claude/hooks/pre-tool-use-anti-loop.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/pre-tool-use-guard-verification-write.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/pre-tool-use-guard-test-mutation.sh",
+            "timeout": 5
           }
         ]
       },
@@ -261,6 +271,16 @@
             "type": "command",
             "command": "$HOME/.config/claude/hooks/pre-tool-use-block-pr-without-review.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/pre-tool-use-guard-verification-write.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/pre-tool-use-guard-test-mutation.sh",
+            "timeout": 5
           }
         ]
       }
@@ -283,6 +303,16 @@
             "type": "command",
             "command": "$HOME/.config/claude/hooks/post-tool-use-anti-loop-record.sh",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "WebFetch|mcp__fetch-mcp__fetch_url|mcp__fetch-mcp__fetch_youtube_transcript|mcp__readability__read_url_content_as_markdown",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/post-tool-use-untrusted-fetch-guard.sh",
+            "timeout": 5
           }
         ]
       }

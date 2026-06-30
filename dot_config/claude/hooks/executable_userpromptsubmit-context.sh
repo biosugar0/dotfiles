@@ -36,7 +36,9 @@ if git -C "${CLAUDE_PROJECT_DIR:-.}" rev-parse --is-inside-work-tree >/dev/null 
 fi
 [ -z "$git_status" ] && git_status="（clean）"
 
-now=$(date '+%Y-%m-%d %H:%M:%S')
+# 注入は毎 prompt 行われる。volatile 値(時刻)は分精度に丸め、秒ごとに文字列が変わるのを避ける
+# (同一分内の連投で additionalContext を不変にする。揮発ブロックは静的な golden/workflow の後=末尾に固定)。
+now=$(date '+%Y-%m-%d %H:%M')
 
 # Single additionalContext payload（shell 依存の echo '\n' を排し printf で組み立て）
 context=$(printf '%s\n\n%s\n\n## Git status (--short)\n%s\n\n---\nCurrent time: %s\n' \

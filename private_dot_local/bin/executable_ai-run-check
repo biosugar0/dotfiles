@@ -14,15 +14,26 @@
 #
 # 使い方:
 #   ai-run-check [--max N] [--phase investigate|implement|verify] [--slug S] -- <check command...>
+#   ai-run-check --write-receipt -- <check command...>  # 実 exit code から verification.json を生成
 #   ai-run-check --status        # loop.json を表示
 #   ai-run-check --reset         # loop counter をクリア
 #   ai-run-check --self-test     # 正規化と signature 安定性を検証(実コマンドを使わない)
 #
 # loop.json は ai/state/loop.json(repo root 基準, gitignore)。env AI_RUN_CHECK_LOOP で上書き可(テスト用)。
+#
+# --write-receipt: 検証 receipt(ai/state/verification.json)を **渡したコマンドの実 exit code から** 機械生成する。
+#   stop-hook はこの receipt(status/head_sha/verified_at)を信頼して短絡する。
+#   目的: 手書き(cat >)での「失敗を握り潰した PASS + 捏造 evidence」経路を畳み、receipt を
+#   (a) 実 exit code に束縛し (b) 実行した literal コマンドを evidence に自動記録して監査可能にすること。
+#   限界(正直に): これは「記録されたコマンドが exit 0 した」ことの証明であって、真の検証スイートが
+#   走った保証ではない(例: `--write-receipt -- true` でも PASS は書ける)。evidence の中身を stop-hook が
+#   検査する強化は follow-up。security boundary ではない。
+#   status は rc==0 で PASS、それ以外で FAIL。written_by:"ai-run-check" を provenance として付与。
+#   env AI_RUN_CHECK_VERIFY で出力先を上書き可(テスト用)。
 
 set -euo pipefail
 
-MAX=3; PHASE=""; SLUG=""; MODE="run"; RECORD_CMD=""; RECORD_FILE=""
+MAX=3; PHASE=""; SLUG=""; MODE="run"; RECORD_CMD=""; RECORD_FILE=""; WRITE_RECEIPT=0
 CMD=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -36,6 +47,7 @@ while [ $# -gt 0 ]; do
     --reset) MODE="reset" ;;
     --self-test) MODE="self-test" ;;
     --record) MODE="record" ;;                       # 実行済み出力から signature 記録(PostToolUse hook 用)
+    --write-receipt) WRITE_RECEIPT=1 ;;              # 実 exit code から verification.json を生成
     --cmd) shift; RECORD_CMD="$1" ;;
     --cmd=*) RECORD_CMD="${1#--cmd=}" ;;
     --output-file) shift; RECORD_FILE="$1" ;;
@@ -49,6 +61,7 @@ done
 
 REPO=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 LOOP_FILE="${AI_RUN_CHECK_LOOP:-$REPO/ai/state/loop.json}"
+VERIFY_FILE="${AI_RUN_CHECK_VERIFY:-$REPO/ai/state/verification.json}"
 
 # slug/phase はファイルに展開するので安全な文字に限定(loop.json への JSON injection 防止)
 SLUG=$(printf '%s' "$SLUG" | tr -cd 'A-Za-z0-9._-')
@@ -139,6 +152,33 @@ write_loop() { # $1=sig $2=count $3=kind
 JSON
 }
 
+# verification.json receipt を **実 exit code から** 生成する。手書き自己申告を排し verifier-gaming を低減する。
+# stop-hook は status/head_sha/verified_at を読む。written_by は provenance(stop-hook は要求しないが後方互換)。
+write_verification() { # $1=rc
+  local rc="$1" status head ts cmd_str
+  if [ "$rc" -eq 0 ]; then status=PASS; else status=FAIL; fi
+  head=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)
+  ts=$(now)
+  cmd_str=$(printf '%s ' "${CMD[@]}"); cmd_str=${cmd_str% }
+  mkdir -p "$(dirname "$VERIFY_FILE")"
+  if command -v jq >/dev/null 2>&1; then
+    jq -n --arg h "$head" --arg t "$ts" --arg s "$status" --arg c "$cmd_str" --argjson rc "$rc" \
+      '{head_sha:$h, verified_at:$t, status:$s, evidence:["ai-run-check -- \($c) → exit \($rc)"], written_by:"ai-run-check"}' \
+      > "$VERIFY_FILE"
+  else
+    # jq 不在: コマンド文字列は JSON injection 回避のため省く(最小 receipt)。
+    cat > "$VERIFY_FILE" <<JSON
+{
+  "head_sha": "$head",
+  "verified_at": "$ts",
+  "status": "$status",
+  "evidence": ["ai-run-check verify exit=$rc (jq unavailable)"],
+  "written_by": "ai-run-check"
+}
+JSON
+  fi
+}
+
 read_field() { # $1=key  (loop.json から素朴に読む。jq があれば使う)
   [ -f "$LOOP_FILE" ] || { echo ""; return; }
   if command -v jq >/dev/null 2>&1; then jq -r ".$1 // \"\"" "$LOOP_FILE" 2>/dev/null; else
@@ -225,6 +265,8 @@ if [ "$MODE" = "self-test" ]; then
   fail=0
   T=$(mktemp -d /tmp/ai-run-check-st.XXXXXX)
   export AI_RUN_CHECK_LOOP="$T/loop.json"
+  # LOOP_FILE/VERIFY_FILE は起動時に確定済みのため self-test では明示的に temp へ再代入(実 repo を汚さない)
+  LOOP_FILE="$T/loop.json"; VERIFY_FILE="$T/verification.json"
   SLUG=st; PHASE=verify; MAX=3
 
   # 同一論理失敗(path/pid/timestamp/行番号だけ異なる)→ 同一 signature か
@@ -278,8 +320,39 @@ if [ "$MODE" = "self-test" ]; then
     && ! has_failure "$T/no-error.txt" && ! has_failure "$T/no-docs.txt" \
     && echo "  ok: has_failure パターン" || { echo "  FAIL: has_failure パターン"; fail=1; }
 
+  # --write-receipt: 実 exit code から PASS/FAIL を機械生成し head_sha/written_by を含むこと
+  CMD=(sh -c 'exit 0'); write_verification 0
+  if command -v jq >/dev/null 2>&1; then
+    rstatus=$(jq -r '.status' "$VERIFY_FILE"); rby=$(jq -r '.written_by' "$VERIFY_FILE"); rhead=$(jq -r '.head_sha' "$VERIFY_FILE")
+    [ "$rstatus" = "PASS" ] && [ "$rby" = "ai-run-check" ] && [ -n "$rhead" ] \
+      && echo "  ok: write_receipt rc=0 → PASS(written_by/head_sha 付き)" || { echo "  FAIL: receipt PASS=$rstatus by=$rby head=$rhead"; fail=1; }
+    write_verification 1
+    rstatus2=$(jq -r '.status' "$VERIFY_FILE")
+    [ "$rstatus2" = "FAIL" ] && echo "  ok: write_receipt rc!=0 → FAIL" || { echo "  FAIL: receipt rc1 status=$rstatus2 (expected FAIL)"; fail=1; }
+    jq -e . "$VERIFY_FILE" >/dev/null 2>&1 && echo "  ok: receipt は valid JSON" || { echo "  FAIL: receipt が不正 JSON"; fail=1; }
+    # 実パス回帰: run_check が失敗(非0)しても write_verification が走り PASS→FAIL に更新されること。
+    # 旧バグ(`set +e; run_check; rc=$?`)は run_check 内 set -e 漏れで abort し古い PASS が残った。
+    write_verification 0
+    CMD=(sh -c 'exit 3'); rcx=0; run_check >/dev/null 2>&1 || rcx=$?
+    write_verification "$rcx"
+    rfail=$(jq -r '.status' "$VERIFY_FILE")
+    [ "$rfail" = "FAIL" ] && echo "  ok: 失敗 verify が PASS→FAIL に更新(rc捕捉回帰)" || { echo "  FAIL: 失敗後 status=$rfail (expected FAIL)"; fail=1; }
+  else
+    echo "  skip: jq 不在のため receipt 検証をスキップ"
+  fi
+
   rm -rf "$T"
   if [ "$fail" -eq 0 ]; then echo "SELF-TEST: PASS"; exit 0; else echo "SELF-TEST: FAIL"; exit 1; fi
+fi
+
+# --write-receipt 指定時: run_check の exit code を保持しつつ receipt を書く(透明性は維持)。
+# 注: `set +e; run_check; rc=$?` は使えない。run_check が内部で `set -e` を再有効化し復元しないため、
+# 失敗(非0 return)時に呼び出し側 errexit が効いて write_verification 前に script が abort し、
+# 古い PASS receipt が残る(検証失敗を握り潰す致命的バグ)。`run_check || rc=$?` で rc を確実に捕捉する。
+if [ "$WRITE_RECEIPT" = "1" ]; then
+  rc=0; run_check || rc=$?
+  write_verification "$rc"
+  exit "$rc"
 fi
 
 run_check
