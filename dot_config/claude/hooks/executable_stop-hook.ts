@@ -30,6 +30,7 @@ interface TranscriptEntry {
   type: string;
   message?: {
     content: string | ContentBlock[];
+    stop_reason?: string;
   };
 }
 
@@ -421,6 +422,71 @@ function djb2(s: string): string {
   return (h >>> 0).toString(36);
 }
 
+// ─── tool-call タグ破損（Opus 4.8）検知 ───
+// Opus 4.8/4.7 は長大な tool 呼び出しを構造化 tool_use にできず、assistant text チャネルに
+// 素の XML(先頭 court 化・antml 名前空間欠落の <invoke name="...">…</invoke>)として漏らす。
+// 正常時これらのタグは tool_use 側に入り text には出ないため、最後の assistant エントリが
+// 「tool_use ブロックを持たず、stop_reason=tool_use（＝tool 呼び出しを試みた）で、text に
+// invoke 署名を含む」なら未実行の破損とみなせる。stop_reason 条件でバグ議論等の誤検知を排す。
+export interface ToolcallLeak {
+  tool: string;
+  command: string | null;
+  sig: string;
+}
+
+export function detectToolcallLeakInText(text: string): ToolcallLeak | null {
+  if (!text) return null;
+  const m = text.match(/<invoke\s+name="([^"]+)"\s*>/);
+  if (!m) return null;
+  // 完全な漏洩構造を伴うことを要求（単なる言及の誤検知を抑制）
+  if (!/<\/invoke>|<parameter\s+name=/.test(text)) return null;
+  const tool = m[1];
+  const cmdM = text.match(/<parameter\s+name="command">([\s\S]*?)<\/parameter>/);
+  const command = cmdM ? cmdM[1].trim() : null;
+  const anchor = m.index ?? 0;
+  const sig = djb2(`${tool}:${command ?? text.slice(anchor, anchor + 120)}`);
+  return { tool, command, sig };
+}
+
+/**
+ * transcript 末尾の最後の assistant エントリを読み、未実行の tool-call 破損を検出する。
+ * tool_use ブロックが1つでもあれば「実行済み(=harness の auto-retry で復旧済み or 正常)」と
+ * みなし null。stop_reason!=="tool_use"（＝tool 呼び出しを試みていない通常の text 応答）も null。
+ */
+export async function detectUnrecoveredLeak(
+  transcriptPath: string,
+): Promise<ToolcallLeak | null> {
+  try {
+    const content = await Deno.readTextFile(transcriptPath);
+    const lines = content.trimEnd().split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      let entry: TranscriptEntry;
+      try {
+        entry = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (entry.type !== "assistant" || !entry.message?.content) continue;
+      const msgContent = entry.message.content;
+      if (!Array.isArray(msgContent)) return null;
+      // tool_use が成立していれば破損ではない（実行された）
+      if (msgContent.some((b) => b.type === "tool_use")) return null;
+      // tool 呼び出しを試みた形跡（stop_reason=tool_use）が無ければ通常の text 応答
+      if (entry.message.stop_reason !== "tool_use") return null;
+      const text = msgContent
+        .filter((b) => b.type === "text" && b.text)
+        .map((b) => b.text!)
+        .join("\n");
+      return detectToolcallLeakInText(text);
+    }
+  } catch {
+    // read failure は非致命
+  }
+  return null;
+}
+
 export function detectSpin(hashes: string[]): boolean {
   if (hashes.length < 3) return false;
   const last3 = hashes.slice(-3);
@@ -648,6 +714,65 @@ async function main(): Promise<void> {
       : null;
     const lastMessage = input.last_assistant_message || "";
     const projectDir = Deno.env.get("CLAUDE_PROJECT_DIR") ?? Deno.cwd();
+
+    // ─── tool-call タグ破損（Opus 4.8）の事後自動復旧 ───
+    // harness の auto-retry で復旧せずターン終端に破損が残った場合、block-to-continue で
+    // 「前置きゼロで出し直せ」+抽出コマンドを注入して自動復旧させる。verbatim 再送は再破損
+    // するため no-preamble 指示が要。復旧できず同一破損を繰り返す場合は2回で give-up して
+    // Sonnet 切替を促す(無限ループ防止)。goal/stop_hook_active 判定より前に置き、常に検査する。
+    if (input.transcript_path) {
+      const recPath = `/tmp/claude-toolcall-recovery-${
+        djb2(input.transcript_path)
+      }.json`;
+      const leak = await detectUnrecoveredLeak(input.transcript_path);
+      if (leak) {
+        let prev: { sig: string; count: number } | null = null;
+        try {
+          prev = JSON.parse(await Deno.readTextFile(recPath));
+        } catch {
+          // 初回
+        }
+        const count = prev && prev.sig === leak.sig ? prev.count + 1 : 1;
+        if (count <= 2) {
+          try {
+            await Deno.writeTextFile(
+              recPath,
+              JSON.stringify({ sig: leak.sig, count }),
+            );
+          } catch {
+            // best-effort
+          }
+          const cmdBlock = leak.command
+            ? `\n\n再実行すべき内容:\n\`\`\`\n${leak.command.slice(0, 1500)}\n\`\`\``
+            : "";
+          console.log(
+            JSON.stringify({
+              decision: "block",
+              reason:
+                `⚠️ tool-call タグ破損を検知（${leak.tool} が未実行のまま text に漏洩）。` +
+                `次の応答は**前置きテキストを一切書かず、先頭トークンから ${leak.tool} tool call を出し直す**こと` +
+                `（このバグは前置きゼロで回避できる。verbatim 再送・インライン heredoc は再破損するので、` +
+                `重いコマンドは bin/ ヘルパーかスクリプトファイル経由にする）。${cmdBlock}`,
+            }),
+          );
+          Deno.exit(0);
+        }
+        // give-up: 復旧失敗。state をクリア・通知して通常フローへ委ねる
+        try {
+          await Deno.remove(recPath);
+        } catch {
+          // ok
+        }
+        notifyStop("tool-call破損の自動復旧に失敗。/model sonnet 切替を推奨");
+      } else {
+        // 破損なし → 復旧カウンタをクリア
+        try {
+          await Deno.remove(recPath);
+        } catch {
+          // ok
+        }
+      }
+    }
 
     // verification receipt は最大1回だけ読む（短絡判定と annotation で共有）。
     // 早期 exit パス(background待機/stop_hook_active)では呼ばれず git コストを払わない。
