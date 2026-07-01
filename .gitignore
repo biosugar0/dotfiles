@@ -10,3 +10,5 @@ dot_config/zsh/dot_zcompdump*
 .playwright-cli/
 .claude-sessions/
 .claude/scheduled_tasks.lock
+# hook の deno run が生成（再生成可能）
+dot_config/claude/hooks/deno.lock
