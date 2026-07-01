@@ -1,6 +1,6 @@
 ---
 name: sonnet-bash-runner
-description: 重い/複雑な Bash コマンド（長い python heredoc・tmux guard・多段パイプ等）を Sonnet 5 で確実に実行する。Opus 4.8 の tool-call タグ破損("court"化)を回避するために使う。渡されたコマンドをそのまま一字一句実行し、生の出力を中継するだけの実行係。単純な ls/cat/grep 等は直接 Bash で実行し、ここには委譲しないこと。
+description: Bash コマンドを Sonnet 5 で確実に実行する。Opus 4.8 の tool-call タグ破損("court"化)を回避するために使う。実データで単純な gh 一発コマンドやスクリプト呼び出し自体も破損することが判明したため、既定 Opus 稼働時は ls/pwd/cat/echo 等の一瞬で終わる軽量コマンド以外の Bash はここに委譲する。渡されたコマンドをそのまま一字一句実行し、生の出力を中継するだけの実行係。
 tools: Bash
 model: sonnet
 maxTurns: 3
