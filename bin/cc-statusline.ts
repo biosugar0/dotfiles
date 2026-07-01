@@ -50,6 +50,45 @@ type SummaryCache = {
 const SUMMARY_CACHE_DIR = "/tmp/claude-session-summaries";
 const SUMMARY_CACHE_TTL_MS = 300_000; // 5min
 
+// ─── Goal state (shared with stop-hook.ts) ───
+
+type GoalState = {
+  condition: string;
+  setAt: number;
+  iterations: number;
+  targetTurns: number | null;
+};
+
+function djb2(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h + s.charCodeAt(i)) & 0xffffffff;
+  }
+  return (h >>> 0).toString(36);
+}
+
+async function getGoalStatus(transcriptPath: string): Promise<string> {
+  try {
+    const goalFile = `/tmp/claude-goal-${djb2(transcriptPath)}.json`;
+    const goal: GoalState = JSON.parse(await Deno.readTextFile(goalFile));
+    if (!goal.condition) return "";
+    const elapsed = Date.now() - goal.setAt;
+    const min = Math.floor(elapsed / 60000);
+    const timeStr = min >= 60
+      ? `${Math.floor(min / 60)}h${min % 60}m`
+      : `${min}m`;
+    const turnStr = goal.targetTurns
+      ? `${goal.iterations}/${goal.targetTurns}`
+      : `${goal.iterations}`;
+    const cond = goal.condition.length > 40
+      ? goal.condition.slice(0, 37) + "…"
+      : goal.condition;
+    return `◎ Goal (${turnStr}, ${timeStr}): ${cond}`;
+  } catch {
+    return "";
+  }
+}
+
 // RGB colors (from article: better visibility)
 const RESET = "\x1b[0m";
 const GREEN = "\x1b[38;2;151;201;195m";
@@ -394,12 +433,15 @@ async function main() {
   const linesRemoved = input.cost?.total_lines_removed ?? 0;
   const exceeds200k = input.exceeds_200k_tokens ?? false;
 
-  const [gitBranch, sessionSummary] = await Promise.all([
+  const [gitBranch, sessionSummary, goalStatus] = await Promise.all([
     input.worktree?.branch
       ? Promise.resolve(input.worktree.branch)
       : getGitBranch(input.workspace?.current_dir),
     input.session_id && input.transcript_path
       ? getSessionSummary(input.session_id, input.transcript_path)
+      : Promise.resolve(""),
+    input.transcript_path
+      ? getGoalStatus(input.transcript_path)
       : Promise.resolve(""),
   ]);
   const rateLimits = input.rate_limits;
@@ -411,6 +453,11 @@ async function main() {
     console.log(`${YELLOW}📋 ${sessionSummary}${RESET}`);
   } else if (input.session_name) {
     console.log(`${YELLOW}📋 ${input.session_name}${RESET}`);
+  }
+
+  // Goal status line
+  if (goalStatus) {
+    console.log(`${GREEN}${goalStatus}${RESET}`);
   }
 
   // Line 2: model | dir | lines | branch | context bar | duration
