@@ -70,7 +70,7 @@ cask "notion"
 cask "obsidian"
 cask "tableplus"
 cask "visual-studio-code"
-cask "wezterm@nightly"
+cask "wezterm"
 
 # Casks - Cloud
 cask "gcloud-cli"
