@@ -728,7 +728,13 @@ async function main(): Promise<void> {
       const recPath = `/tmp/claude-toolcall-recovery-${
         djb2(input.transcript_path)
       }.json`;
-      const leak = await detectUnrecoveredLeak(input.transcript_path);
+      // last_assistant_message は harness が同期的に渡す値でファイル読み直しのレースが無い。
+      // transcript ファイルの再読込は、同一応答の thinking/text ブロックが別 JSONL 行に分割
+      // 書き込みされる際、最新の text 行がまだ flush されておらず検知漏れするレースが実際に
+      // 観測された(honeybadger セッションで goal 通知が先に出て復旧が不発になった実例)。
+      // まず lastMessage を優先チェックし、非マッチ時のみファイルベースにフォールバックする。
+      const leak = detectToolcallLeakInText(lastMessage) ??
+        await detectUnrecoveredLeak(input.transcript_path);
       if (leak) {
         let prev: { sig: string; count: number } | null = null;
         try {
