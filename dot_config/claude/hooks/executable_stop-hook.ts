@@ -425,9 +425,11 @@ function djb2(s: string): string {
 // ─── tool-call タグ破損（Opus 4.8）検知 ───
 // Opus 4.8/4.7 は長大な tool 呼び出しを構造化 tool_use にできず、assistant text チャネルに
 // 素の XML(先頭 court 化・antml 名前空間欠落の <invoke name="...">…</invoke>)として漏らす。
-// 正常時これらのタグは tool_use 側に入り text には出ないため、最後の assistant エントリが
-// 「tool_use ブロックを持たず、stop_reason=tool_use（＝tool 呼び出しを試みた）で、text に
-// invoke 署名を含む」なら未実行の破損とみなせる。stop_reason 条件でバグ議論等の誤検知を排す。
+// harness は sr=tool_use で漏れたものはターン内で auto-retry するが、モデルが漏洩 XML を最終
+// テキストとして吐き end_turn で正常停止したケース（sr=end_turn）は retry されず user に戻る。
+// この stranded ケースこそ復旧対象。未実行の漏れは「メッセージ末尾が </invoke> で終わる」形に
+// なる（tool 呼び出しが末尾に来て停止）。バグを prose で論じる文は </invoke> の後に説明が続き
+// 末尾一致しないため、tail-anchor で誤検知を切り分ける（stop_reason には依存しない）。
 export interface ToolcallLeak {
   tool: string;
   command: string | null;
@@ -436,10 +438,12 @@ export interface ToolcallLeak {
 
 export function detectToolcallLeakInText(text: string): ToolcallLeak | null {
   if (!text) return null;
+  // tail-anchor: 末尾（trailing 空白を除く）が </invoke> で終わることを要求。
+  // これが未実行の tool-call 漏洩と、単なる言及/議論テキストとを分ける決定的な差。
+  if (!text.replace(/\s+$/, "").endsWith("</invoke>")) return null;
   const m = text.match(/<invoke\s+name="([^"]+)"\s*>/);
   if (!m) return null;
-  // 完全な漏洩構造を伴うことを要求（単なる言及の誤検知を抑制）
-  if (!/<\/invoke>|<parameter\s+name=/.test(text)) return null;
+  if (!/<parameter\s+name=/.test(text)) return null;
   const tool = m[1];
   const cmdM = text.match(/<parameter\s+name="command">([\s\S]*?)<\/parameter>/);
   const command = cmdM ? cmdM[1].trim() : null;
@@ -473,8 +477,8 @@ export async function detectUnrecoveredLeak(
       if (!Array.isArray(msgContent)) return null;
       // tool_use が成立していれば破損ではない（実行された）
       if (msgContent.some((b) => b.type === "tool_use")) return null;
-      // tool 呼び出しを試みた形跡（stop_reason=tool_use）が無ければ通常の text 応答
-      if (entry.message.stop_reason !== "tool_use") return null;
+      // 誤検知の切り分けは detectToolcallLeakInText の tail-anchor に委ねる
+      // （stop_reason は stranded=end_turn / auto-retried=tool_use の両方を取りうるため見ない）
       const text = msgContent
         .filter((b) => b.type === "text" && b.text)
         .map((b) => b.text!)
