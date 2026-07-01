@@ -755,6 +755,12 @@ async function main(): Promise<void> {
           const cmdBlock = leak.command
             ? `\n\n再実行すべき内容:\n\`\`\`\n${leak.command.slice(0, 1500)}\n\`\`\``
             : "";
+          // Bash 限定: sonnet-bash-runner(model:sonnet固定subagent)への委譲を提案する。
+          // 直接 Bash を出し直す(=同じ破損しやすい経路のリトライ)より、Sonnet実行に切り替える方が
+          // 確実(このセッション実績でSonnetのleakは0件)。Write/Edit/Agent等は委譲先が無いため対象外。
+          const delegateHint = leak.tool === "Bash"
+            ? " 可能なら直接出し直さず、sonnet-bash-runner subagent(Agent tool)にこのコマンドの実行を委譲することを検討せよ(Sonnet 5固定でこの破損が起きない)。"
+            : "";
           console.log(
             JSON.stringify({
               decision: "block",
@@ -762,7 +768,7 @@ async function main(): Promise<void> {
                 `⚠️ tool-call タグ破損を検知（${leak.tool} が未実行のまま text に漏洩）。` +
                 `次の応答は**前置きテキストを一切書かず、先頭トークンから ${leak.tool} tool call を出し直す**こと` +
                 `（このバグは前置きゼロで回避できる。verbatim 再送・インライン heredoc は再破損するので、` +
-                `重いコマンドは bin/ ヘルパーかスクリプトファイル経由にする）。${cmdBlock}`,
+                `重いコマンドは bin/ ヘルパーかスクリプトファイル経由にする）。${delegateHint}${cmdBlock}`,
             }),
           );
           Deno.exit(0);
