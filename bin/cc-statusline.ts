@@ -67,11 +67,17 @@ function djb2(s: string): string {
   return (h >>> 0).toString(36);
 }
 
-async function getGoalStatus(transcriptPath: string): Promise<string> {
+type GoalDisplay = {
+  turnStr: string;
+  timeStr: string;
+  condition: string;
+};
+
+async function getGoalStatus(transcriptPath: string): Promise<GoalDisplay | null> {
   try {
     const goalFile = `/tmp/claude-goal-${djb2(transcriptPath)}.json`;
     const goal: GoalState = JSON.parse(await Deno.readTextFile(goalFile));
-    if (!goal.condition) return "";
+    if (!goal.condition) return null;
     const elapsed = Date.now() - goal.setAt;
     const min = Math.floor(elapsed / 60000);
     const timeStr = min >= 60
@@ -80,12 +86,9 @@ async function getGoalStatus(transcriptPath: string): Promise<string> {
     const turnStr = goal.targetTurns
       ? `${goal.iterations}/${goal.targetTurns}`
       : `${goal.iterations}`;
-    const cond = goal.condition.length > 40
-      ? goal.condition.slice(0, 37) + "…"
-      : goal.condition;
-    return `◎ Goal (${turnStr}, ${timeStr}): ${cond}`;
+    return { turnStr, timeStr, condition: goal.condition };
   } catch {
-    return "";
+    return null;
   }
 }
 
@@ -96,6 +99,8 @@ const YELLOW = "\x1b[38;2;229;192;123m";
 const RED = "\x1b[38;2;224;108;117m";
 const GRAY = "\x1b[38;2;74;88;92m";
 const CYAN = "\x1b[36m";
+const DIM = "\x1b[38;2;128;128;128m";
+const WHITE = "\x1b[37m";
 
 function colorForPct(pct: number): string {
   return pct >= 80 ? RED : pct >= 50 ? YELLOW : GREEN;
@@ -446,6 +451,13 @@ async function main() {
   ]);
   const rateLimits = input.rate_limits;
 
+  let cols = 80;
+  try {
+    cols = Deno.consoleSize().columns;
+  } catch {
+    cols = parseInt(Deno.env.get("COLUMNS") ?? "80", 10) || 80;
+  }
+
   const sep = `${GRAY} │ ${RESET}`;
 
   // Line 1: Session summary with session_name as fallback
@@ -457,7 +469,15 @@ async function main() {
 
   // Goal status line
   if (goalStatus) {
-    console.log(`${GREEN}${goalStatus}${RESET}`);
+    const meta = `turn ${goalStatus.turnStr} · ${goalStatus.timeStr}`;
+    const fixedLen = 2 + 6 + meta.length + 3;
+    const maxCond = Math.max(20, cols - fixedLen);
+    const cond = goalStatus.condition.length > maxCond
+      ? goalStatus.condition.slice(0, maxCond - 1) + "…"
+      : goalStatus.condition;
+    console.log(
+      `${GREEN}🎯 Goal ${DIM}${meta} ${WHITE}${cond}${RESET}`,
+    );
   }
 
   // Line 2: model | dir | lines | branch | context bar | duration
@@ -474,13 +494,6 @@ async function main() {
   infoParts.push(buildBar(pct));
   infoParts.push(`󰥔 ${formatDuration(duration)}`);
   const infoStr = infoParts.join(sep);
-
-  let cols = 80;
-  try {
-    cols = Deno.consoleSize().columns;
-  } catch {
-    cols = parseInt(Deno.env.get("COLUMNS") ?? "80", 10) || 80;
-  }
 
   if (visibleLength(infoStr) <= cols) {
     console.log(infoStr);
