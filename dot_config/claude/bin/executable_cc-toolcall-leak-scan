@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""cc-toolcall-leak-scan: Claude Code の transcript から tool-call タグ破損を検出・集計する。
+
+Opus 4.8/4.7 は長大な Bash 等で tool-call の XML タグを構造化 tool_use ブロックに
+できず、assistant の text チャネルに素の XML(`<invoke ...>` / `</parameter>` /
+`</invoke>`、先頭が `court` に化け `antml:` 名前空間欠落)として漏らすバグがある。
+harness はこれをパースできず「Your tool call was malformed and could not be parsed.
+Please retry.」を注入する。
+
+正常時これらのタグは text チャネルに現れない(tool_use 側に入る)ため、
+assistant の text ブロックに現れたら破損の強いシグナルとみなせる。
+
+Usage:
+  cc-toolcall-leak-scan [PATH ...]     PATH は .jsonl か、それを含むディレクトリ
+                                       省略時は ~/.config/claude/projects を再帰走査
+  cc-toolcall-leak-scan --top N        破損の多いセッション上位 N 件(既定 15)
+
+注意: このスクリプト自身や、tool-call 形式を議論した transcript は誤検知しうる
+(text 中に例示としてタグが出るため)。offending セッションを併記するので目視確認可。
+"""
+import json
+import os
+import sys
+from collections import defaultdict
+
+# text ブロック内に現れたら破損とみなすリテラル(いずれも正常時は tool_use 側)
+LEAK_MARKERS = ('<invoke name=', '</invoke>', '</parameter>', '<parameter name=')
+
+
+def iter_jsonl(paths):
+    default = os.path.expanduser('~/.config/claude/projects')
+    targets = paths or [default]
+    for t in targets:
+        t = os.path.expanduser(t)
+        if os.path.isfile(t) and t.endswith('.jsonl'):
+            yield t
+        elif os.path.isdir(t):
+            for root, _, files in os.walk(t):
+                for f in files:
+                    if f.endswith('.jsonl'):
+                        yield os.path.join(root, f)
+
+
+def text_blocks(msg):
+    c = msg.get('content')
+    if isinstance(c, str):
+        return [c]
+    if isinstance(c, list):
+        return [b.get('text', '') for b in c
+                if isinstance(b, dict) and b.get('type') == 'text']
+    return []
+
+
+def bash_count(msg):
+    c = msg.get('content')
+    if not isinstance(c, list):
+        return 0
+    return sum(1 for b in c if isinstance(b, dict)
+               and b.get('type') == 'tool_use' and b.get('name') == 'Bash')
+
+
+def scan_file(path):
+    """(per_model_leaks, per_model_bash, per_model_turns, total_leaks) を返す。"""
+    leaks = defaultdict(int)
+    bash = defaultdict(int)
+    turns = defaultdict(int)
+    total = 0
+    try:
+        with open(path, encoding='utf-8') as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    o = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if o.get('type') != 'assistant':
+                    continue
+                msg = o.get('message', {})
+                model = msg.get('model') or 'unknown'
+                turns[model] += 1
+                bash[model] += bash_count(msg)
+                for tx in text_blocks(msg):
+                    if any(m in tx for m in LEAK_MARKERS):
+                        leaks[model] += 1
+                        total += 1
+    except OSError:
+        pass
+    return leaks, bash, turns, total
+
+
+def main(argv):
+    top_n = 15
+    paths = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == '--top':
+            i += 1
+            top_n = int(argv[i]) if i < len(argv) else top_n
+        elif a in ('-h', '--help'):
+            print(__doc__)
+            return 0
+        else:
+            paths.append(a)
+        i += 1
+
+    g_leaks = defaultdict(int)
+    g_bash = defaultdict(int)
+    g_turns = defaultdict(int)
+    per_session = []  # (leak_total, path)
+    n_files = 0
+
+    for path in iter_jsonl(paths):
+        n_files += 1
+        leaks, bash, turns, total = scan_file(path)
+        for m, v in leaks.items():
+            g_leaks[m] += v
+        for m, v in bash.items():
+            g_bash[m] += v
+        for m, v in turns.items():
+            g_turns[m] += v
+        if total:
+            per_session.append((total, path))
+
+    print(f"scanned {n_files} transcript(s)\n")
+    models = sorted(set(g_leaks) | set(g_bash) | set(g_turns))
+    if not models:
+        print("no assistant messages found")
+        return 0
+
+    print(f"{'model':<26}{'leaks':>8}{'bash':>8}{'turns':>8}{'leak/turn':>12}")
+    print('-' * 62)
+    for m in models:
+        lk, bc, tn = g_leaks[m], g_bash[m], g_turns[m]
+        rate = f"{lk / tn:.2%}" if tn else "-"
+        print(f"{m:<26}{lk:>8}{bc:>8}{tn:>8}{rate:>12}")
+
+    if per_session:
+        per_session.sort(reverse=True)
+        print(f"\ntop {min(top_n, len(per_session))} sessions by leak count:")
+        for total, path in per_session[:top_n]:
+            print(f"  {total:>4}  {path}")
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))
