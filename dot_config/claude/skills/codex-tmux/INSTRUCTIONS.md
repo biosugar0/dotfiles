@@ -402,14 +402,25 @@ fi
 
 ### H-Step 2: 完了検知
 
-**一次手段は `wait agent-status`**（Herdr の manifest ベース agent 状態検知）。
-画面文字列マッチと違い、プロンプト行やコマンドエコーによる偽マッチがない。
-tmux 版の5秒ポーリングループは不要。
+**一次手段は agent 状態**（Herdr の manifest ベース検知）。画面文字列マッチと違い、
+プロンプト行やコマンドエコーによる偽マッチがない。
+完了の定義は「`working` から抜けた」こと。**実測: 入力プロンプト待ちの codex は
+`idle` ではなく `blocked` と報告される**（入力待ち=要対応の分類）ため、
+`wait agent-status --status idle` は完了しても返らないことがある。
+到達状態が idle/blocked/done のどれかになるかは確定しないので、状態をポーリングする
+（tmux 版の capture-pane 差分ポーリングと違い、判定は semantic なので誤検知しない）。
 
 ```bash
-# codex が working → idle に戻る = 応答完了。timeout は ms、長い調査なら延ばす
-herdr wait agent-status "$CODEX_PANE" --status idle --timeout 600000 \
-  || { echo "[guard:wait-timeout] codex 応答待ちがタイムアウト" >&2; return 1 2>/dev/null || exit 1; }
+# working から抜けるまで待つ (5秒間隔、既定 10 分で timeout)
+_waited=0
+while :; do
+  _st=$(herdr agent get "$CODEX_PANE" 2>/dev/null \
+    | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["agent"]["agent_status"])' 2>/dev/null)
+  [ -n "$_st" ] && [ "$_st" != "working" ] && { echo "[codex-tmux] status=$_st (完了)"; break; }
+  _waited=$((_waited+5))
+  [ "$_waited" -ge 600 ] && { echo "[guard:wait-timeout] codex 応答待ちがタイムアウト" >&2; return 1 2>/dev/null || exit 1; }
+  sleep 5
+done
 ```
 
 フォールバック（agent 検知が unknown のままの場合のみ）:
@@ -462,12 +473,17 @@ actual_label=$(herdr pane get "$CODEX_PANE" 2>/dev/null \
 [ -n "$actual_label" ] && [ "$actual_label" = "${CODEX_LABEL:-}" ] \
   || { echo "[guard:pane-missing-or-reused] CODEX_PANE ($CODEX_PANE) が不在か別 pane に再利用済み (label='$actual_label' 期待='$CODEX_LABEL') — H-Step 1 からやり直し" >&2; return 1 2>/dev/null || exit 1; }
 
-# 2. codex がプロンプト待ち状態か（glyph は版により ❯ または › のいずれか）
-# pane 末尾は空行になり得る（実測）ため、最後の「非空行」を判定対象にする
-last_line=$(herdr pane read "$CODEX_PANE" --source recent-unwrapped --lines 5 \
-  | grep -v '^[[:space:]]*$' | tail -1)
-if ! echo "$last_line" | grep -qE '[❯›]'; then
-  echo "[guard:not-ready] codexがプロンプト待ちではない — abort (H-Step 2 の wait を回してからやり直し)" >&2
+# 2. codex がプロンプト待ち状態か。
+# 一次判定は「agent_status が working でない」（manifest ベース。画面構造に依存しない。
+# 実測: プロンプト待ちは blocked と報告されるため == idle 判定は使えない）。
+# 「最終非空行に ❯」判定は codex TUI の最下行がステータスバー
+# （"gpt-5.5 xhigh · <cwd>"）のため構造的に偽陰性になる（実測）。
+# 補助として末尾5行内の glyph 存在も確認する。
+codex_status=$(herdr agent get "$CODEX_PANE" 2>/dev/null \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["agent"]["agent_status"])' 2>/dev/null)
+tail_lines=$(herdr pane read "$CODEX_PANE" --source recent-unwrapped --lines 5)
+if [ -z "$codex_status" ] || [ "$codex_status" = "working" ] || ! printf '%s' "$tail_lines" | grep -qE '[❯›]'; then
+  echo "[guard:not-ready] codexがプロンプト待ちではない (status=$codex_status) — abort (H-Step 2 の wait を回してからやり直し)" >&2
   return 1 2>/dev/null || exit 1
 fi
 ```
