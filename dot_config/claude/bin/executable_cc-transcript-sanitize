@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""cc-transcript-sanitize: transcript JSONL から tool-call タグ破損(court化)の漏洩 XML を無害化する。
+
+破損 XML が履歴に残るとモデルが手本として模倣し再発する(self-poisoning)ため、
+resume 前に毒を抜く。エントリ削除は parentUuid チェーンを壊すので行わず、
+該当 text ブロック内の漏洩 XML 部分だけをマーカー文字列に置換する(構造・uuid は維持)。
+サニタイズ済み transcript は `claude --resume` 時にモデルへ渡る履歴に反映される。
+ライブセッションの in-memory 履歴には効かない(SessionEnd 後〜resume 前に実行する前提)。
+
+判定基準は stop-hook.ts detectToolcallLeakInText と同一(tail-anchor):
+  assistant エントリ / tool_use ブロック無し / 最終 text ブロックが(末尾空白除き)
+  </invoke> で終わり <invoke name= と <parameter name= を含む
+
+漏洩 XML の直前にある stray token 行("court"/"call" 等の1単語行)も併せて除去する。
+置換済みエントリは tail-anchor を満たさなくなるため再実行は no-op(冪等)。
+未変更行は byte-exact で保持し、変更があった場合のみ FILE.pre-sanitize.bak を
+残して(既存なら上書きしない) temp+rename で原子的に書き戻す。
+
+Usage:
+  cc-transcript-sanitize FILE.jsonl [...]     指定 transcript を in-place 無害化
+  cc-transcript-sanitize --dry-run FILE ...   置換対象の報告のみ(書き換えない)
+  cc-transcript-sanitize --hook               stdin の hook JSON から transcript_path を
+                                              取得して無害化(SessionEnd hook 用。常に exit 0)
+"""
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
+
+INVOKE_RE = re.compile(r'<invoke\s+name="([^"]+)"')
+STRAY_TOKEN_RE = re.compile(r'[A-Za-z]{2,20}')
+MARKER_PREFIX = '[toolcall-leak redacted:'
+
+
+def sanitize_text(text):
+    """漏洩 XML を含む text を無害化した文字列を返す。対象外なら None。"""
+    if not text.rstrip().endswith('</invoke>'):
+        return None
+    m = INVOKE_RE.search(text)
+    if not m or '<parameter name=' not in text:
+        return None
+    tool = m.group(1)
+    head = text[:m.start()]
+    # 漏洩 XML 直前の stray token 行("court" 等の1単語行)も除去
+    lines = head.split('\n')
+    while lines and lines[-1].strip() == '':
+        lines.pop()
+    if lines and STRAY_TOKEN_RE.fullmatch(lines[-1].strip()):
+        lines.pop()
+    head = '\n'.join(lines).rstrip()
+    marker = f'{MARKER_PREFIX} {tool}]'
+    return f'{head}\n\n{marker}' if head else marker
+
+
+def sanitize_entry(obj):
+    """assistant エントリを in-place 無害化。置換したら leaked tool 名、対象外なら None。"""
+    if obj.get('type') != 'assistant':
+        return None
+    content = (obj.get('message') or {}).get('content')
+    if not isinstance(content, list):
+        return None
+    if any(isinstance(b, dict) and b.get('type') == 'tool_use' for b in content):
+        return None
+    text_blocks = [b for b in content
+                   if isinstance(b, dict) and b.get('type') == 'text']
+    if not text_blocks:
+        return None
+    # tail-anchor: 漏洩は最終 text ブロックに末尾として現れる
+    last = text_blocks[-1]
+    new_text = sanitize_text(last.get('text') or '')
+    if new_text is None:
+        return None
+    tool = INVOKE_RE.search(last['text']).group(1)
+    last['text'] = new_text
+    return tool
+
+
+def sanitize_file(path, dry_run=False):
+    """(redacted_count, tools) を返す。dry_run=False かつ変更ありなら書き戻す。"""
+    try:
+        with open(path, encoding='utf-8') as fh:
+            lines = fh.readlines()
+    except OSError as e:
+        print(f"skip {path}: {e}", file=sys.stderr)
+        return 0, []
+
+    out_lines = []
+    tools = []
+    for line in lines:
+        stripped = line.strip()
+        # 高速プレフィルタ: 候補行以外は byte-exact で保持
+        if not stripped or '</invoke>' not in stripped:
+            out_lines.append(line)
+            continue
+        try:
+            obj = json.loads(stripped)
+        except json.JSONDecodeError:
+            out_lines.append(line)
+            continue
+        tool = sanitize_entry(obj)
+        if tool is None:
+            out_lines.append(line)
+            continue
+        tools.append(tool)
+        out_lines.append(json.dumps(obj, ensure_ascii=False) + '\n')
+
+    if tools and not dry_run:
+        bak = path + '.pre-sanitize.bak'
+        if not os.path.exists(bak):
+            shutil.copy2(path, bak)
+        d = os.path.dirname(os.path.abspath(path))
+        fd, tmp = tempfile.mkstemp(dir=d, prefix='.sanitize-')
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+                fh.writelines(out_lines)
+            os.replace(tmp, path)
+        except BaseException:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
+    return len(tools), tools
+
+
+def main(argv):
+    dry_run = False
+    hook_mode = False
+    paths = []
+    for a in argv:
+        if a == '--dry-run':
+            dry_run = True
+        elif a == '--hook':
+            hook_mode = True
+        elif a in ('-h', '--help'):
+            print(__doc__)
+            return 0
+        else:
+            paths.append(a)
+
+    if hook_mode:
+        # SessionEnd hook: stdin の JSON から transcript_path を取り、失敗しても exit 0
+        try:
+            tp = json.load(sys.stdin).get('transcript_path') or ''
+            if tp and os.path.isfile(tp):
+                n, tools = sanitize_file(tp)
+                if n:
+                    print(f"sanitized {n} leaked tool-call(s) in {tp}: {tools}",
+                          file=sys.stderr)
+        except Exception as e:  # hook は session 終了を妨げない
+            print(f"cc-transcript-sanitize --hook: {e}", file=sys.stderr)
+        return 0
+
+    if not paths:
+        print(__doc__)
+        return 1
+    total = 0
+    for p in paths:
+        n, tools = sanitize_file(p, dry_run=dry_run)
+        total += n
+        label = 'would redact' if dry_run else 'redacted'
+        if n:
+            print(f"{label} {n}: {p} {tools}")
+    if total == 0:
+        print("no leaked tool-calls found")
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

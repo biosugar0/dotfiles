@@ -493,6 +493,32 @@ export async function detectUnrecoveredLeak(
   return null;
 }
 
+// ─── tool-call タグ破損の復旧判定（pure 関数・テスト用に export） ───
+// count: 同一 sig の連続検知数（2回まで再送指示、3回目で give-up）
+// total: セッション累積検知数。破損 XML が履歴に残るとモデルが模倣して再発する
+// 連鎖（self-poisoning）が実データで確認されているため（初回破損後の破損率が
+// 桁上がりする・隣接ターンで再発）、累積が閾値を超えたら脱出誘導にエスカレートする。
+export interface LeakRecoveryState {
+  sig: string;
+  count: number;
+  total: number;
+}
+
+export const LEAK_CHAIN_THRESHOLD = 3;
+
+export function decideLeakRecovery(
+  sig: string,
+  prev: LeakRecoveryState | null,
+): { action: "retry" | "giveup"; state: LeakRecoveryState; chained: boolean } {
+  const total = (prev?.total ?? 0) + 1;
+  const count = prev && prev.sig === sig ? prev.count + 1 : 1;
+  return {
+    action: count <= 2 ? "retry" : "giveup",
+    state: { sig, count, total },
+    chained: total >= LEAK_CHAIN_THRESHOLD,
+  };
+}
+
 export function detectSpin(hashes: string[]): boolean {
   if (hashes.length < 3) return false;
   const last3 = hashes.slice(-3);
@@ -740,19 +766,16 @@ async function main(): Promise<void> {
       const leak = detectToolcallLeakInText(lastMessage) ??
         await detectUnrecoveredLeak(input.transcript_path);
       if (leak) {
-        let prev: { sig: string; count: number } | null = null;
+        let prev: LeakRecoveryState | null = null;
         try {
           prev = JSON.parse(await Deno.readTextFile(recPath));
         } catch {
           // 初回
         }
-        const count = prev && prev.sig === leak.sig ? prev.count + 1 : 1;
-        if (count <= 2) {
+        const { action, state, chained } = decideLeakRecovery(leak.sig, prev);
+        if (action === "retry") {
           try {
-            await Deno.writeTextFile(
-              recPath,
-              JSON.stringify({ sig: leak.sig, count }),
-            );
+            await Deno.writeTextFile(recPath, JSON.stringify(state));
           } catch {
             // best-effort
           }
@@ -761,10 +784,21 @@ async function main(): Promise<void> {
             : "";
           // Bash 限定: sonnet-bash-runner(model:sonnet固定subagent)への委譲を提案する。
           // 直接 Bash を出し直す(=同じ破損しやすい経路のリトライ)より、Sonnet実行に切り替える方が
-          // 確実(このセッション実績でSonnetのleakは0件)。Write/Edit/Agent等は委譲先が無いため対象外。
-          await hlog("block:toolcall_leak", leak.tool);
+          // 確実(実測で Sonnet の leak はほぼ0)。Write/Edit/Agent等は委譲先が無いため対象外。
+          await hlog(
+            chained ? "block:toolcall_leak_chained" : "block:toolcall_leak",
+            leak.tool,
+          );
           const delegateHint = leak.tool === "Bash"
             ? " 可能なら直接出し直さず、sonnet-bash-runner subagent(Agent tool)にこのコマンドの実行を委譲することを検討せよ(Sonnet 5固定でこの破損が起きない)。"
+            : "";
+          // 連鎖モード: 破損 XML が履歴に蓄積するとモデルが模倣して再発率が上がる
+          // (self-poisoning)。復旧を試みつつ、セッション脱出をユーザーに提案させる。
+          // 脱出は「終了→resume」を第一候補にする: SessionEnd hook の
+          // cc-transcript-sanitize が transcript の破損 XML を無害化するため、
+          // resume 後は文脈を保ったまま毒だけ抜ける(/clear は全損なので次点)。
+          const chainNote = chained
+            ? `\n\n⚠️ このセッションで累計 ${state.total} 回目の破損（連鎖モード）。壊れた出力が履歴に残るほど再発率が上がる。今回の復旧後、キリの良い所でユーザーに「セッションをexitして claude --resume で再開」を提案せよ（SessionEnd hook が破損履歴を自動無害化するため、文脈を保ったまま毒を抜ける。代替: /model sonnet）。`
             : "";
           console.log(
             JSON.stringify({
@@ -773,24 +807,41 @@ async function main(): Promise<void> {
                 `⚠️ tool-call タグ破損を検知（${leak.tool} が未実行のまま text に漏洩）。` +
                 `次の応答は**前置きテキストを一切書かず、先頭トークンから ${leak.tool} tool call を出し直す**こと` +
                 `（このバグは前置きゼロで回避できる。verbatim 再送・インライン heredoc は再破損するので、` +
-                `重いコマンドは bin/ ヘルパーかスクリプトファイル経由にする）。${delegateHint}${cmdBlock}`,
+                `重いコマンドは bin/ ヘルパーかスクリプトファイル経由にする）。${delegateHint}${cmdBlock}${chainNote}`,
             }),
           );
           Deno.exit(0);
         }
-        // give-up: 復旧失敗。state をクリア・通知して通常フローへ委ねる
+        // give-up: 同一破損の復旧に2回失敗。連続カウンタはクリアし、
+        // total は連鎖判定用に保持して通常フローへ委ねる
         try {
-          await Deno.remove(recPath);
+          await Deno.writeTextFile(
+            recPath,
+            JSON.stringify({ sig: "", count: 0, total: state.total }),
+          );
         } catch {
-          // ok
+          // best-effort
         }
-        notifyStop("tool-call破損の自動復旧に失敗。/model sonnet 切替を推奨");
+        await hlog("giveup:toolcall_leak", leak.tool);
+        notifyStop(
+          chained
+            ? "破損連鎖モード。exit後にresume再開を推奨(自動sanitize)"
+            : "tool-call破損の自動復旧に失敗。/model sonnet 切替を推奨",
+        );
       } else {
-        // 破損なし → 復旧カウンタをクリア
+        // 破損なし → 連続カウンタのみクリア（total はセッション連鎖判定用に保持）
         try {
-          await Deno.remove(recPath);
+          const prev: LeakRecoveryState = JSON.parse(
+            await Deno.readTextFile(recPath),
+          );
+          if (prev.sig || prev.count) {
+            await Deno.writeTextFile(
+              recPath,
+              JSON.stringify({ sig: "", count: 0, total: prev.total ?? 0 }),
+            );
+          }
         } catch {
-          // ok
+          // state なし
         }
       }
     }

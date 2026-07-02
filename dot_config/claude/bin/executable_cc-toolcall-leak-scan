@@ -1,30 +1,34 @@
 #!/usr/bin/env python3
 """cc-toolcall-leak-scan: Claude Code の transcript から tool-call タグ破損を検出・集計する。
 
-Opus 4.8/4.7 は長大な Bash 等で tool-call の XML タグを構造化 tool_use ブロックに
-できず、assistant の text チャネルに素の XML(`<invoke ...>` / `</parameter>` /
-`</invoke>`、先頭が `court` に化け `antml:` 名前空間欠落)として漏らすバグがある。
-harness はこれをパースできず「Your tool call was malformed and could not be parsed.
-Please retry.」を注入する。
+Opus 4.8 は tool-call の XML タグを構造化 tool_use ブロックにできず、assistant の
+text チャネルに素の XML(`<invoke ...>` 等、先頭が `court` に化け `antml:` 名前空間
+欠落)として漏らすバグがある。harness はこれをパースできず「Your tool call was
+malformed and could not be parsed. Please retry.」を注入する。
 
-正常時これらのタグは text チャネルに現れない(tool_use 側に入る)ため、
-assistant の text ブロックに現れたら破損の強いシグナルとみなせる。
+検出は2段階に分類する:
+  real     未実行の実破損 — text が(末尾空白を除き) </invoke> で終わり、かつ同一
+           メッセージに tool_use ブロックが無い(stop-hook.ts の tail-anchor と同一基準)
+  mention  タグ文字列は含むが real 条件を満たさない — 破損を議論/引用しただけの
+           テキストや、同ターンで tool_use が成立済みのもの(誤検知系)
+  redacted cc-transcript-sanitize により無害化済みの元・実破損(マーカー置換済み)
 
 Usage:
   cc-toolcall-leak-scan [PATH ...]     PATH は .jsonl か、それを含むディレクトリ
                                        省略時は ~/.config/claude/projects を再帰走査
-  cc-toolcall-leak-scan --top N        破損の多いセッション上位 N 件(既定 15)
-
-注意: このスクリプト自身や、tool-call 形式を議論した transcript は誤検知しうる
-(text 中に例示としてタグが出るため)。offending セッションを併記するので目視確認可。
+  cc-toolcall-leak-scan --top N        real 破損の多いセッション上位 N 件(既定 15)
+  cc-toolcall-leak-scan --since YYYY-MM-DD   指定日以降の assistant メッセージのみ集計
 """
 import json
 import os
+import re
 import sys
 from collections import defaultdict
 
-# text ブロック内に現れたら破損とみなすリテラル(いずれも正常時は tool_use 側)
+# text ブロック内に現れたら候補とみなすリテラル(いずれも正常時は tool_use 側)
 LEAK_MARKERS = ('<invoke name=', '</invoke>', '</parameter>', '<parameter name=')
+INVOKE_RE = re.compile(r'<invoke\s+name="([^"]+)"')
+REDACTED_MARKER = '[toolcall-leak redacted:'
 
 
 def iter_jsonl(paths):
@@ -51,6 +55,12 @@ def text_blocks(msg):
     return []
 
 
+def has_tool_use(msg):
+    c = msg.get('content')
+    return isinstance(c, list) and any(
+        isinstance(b, dict) and b.get('type') == 'tool_use' for b in c)
+
+
 def bash_count(msg):
     c = msg.get('content')
     if not isinstance(c, list):
@@ -59,12 +69,15 @@ def bash_count(msg):
                and b.get('type') == 'tool_use' and b.get('name') == 'Bash')
 
 
-def scan_file(path):
-    """(per_model_leaks, per_model_bash, per_model_turns, total_leaks) を返す。"""
-    leaks = defaultdict(int)
+def scan_file(path, since=''):
+    """(real, mention, redacted, bash, turns [per-model dicts], tools, real_total)"""
+    real = defaultdict(int)
+    mention = defaultdict(int)
+    redacted = defaultdict(int)
     bash = defaultdict(int)
     turns = defaultdict(int)
-    total = 0
+    tools = defaultdict(int)
+    real_total = 0
     try:
         with open(path, encoding='utf-8') as fh:
             for line in fh:
@@ -77,21 +90,36 @@ def scan_file(path):
                     continue
                 if o.get('type') != 'assistant':
                     continue
+                if since and (o.get('timestamp') or '')[:10] < since:
+                    continue
                 msg = o.get('message', {})
                 model = msg.get('model') or 'unknown'
                 turns[model] += 1
                 bash[model] += bash_count(msg)
-                for tx in text_blocks(msg):
-                    if any(m in tx for m in LEAK_MARKERS):
-                        leaks[model] += 1
-                        total += 1
+                texts = text_blocks(msg)
+                joined = '\n'.join(texts)
+                if REDACTED_MARKER in joined:
+                    redacted[model] += 1
+                if not any(m in joined for m in LEAK_MARKERS):
+                    continue
+                m = INVOKE_RE.search(joined)
+                is_real = (not has_tool_use(msg)
+                           and joined.rstrip().endswith('</invoke>')
+                           and m is not None)
+                if is_real:
+                    real[model] += 1
+                    tools[m.group(1)] += 1
+                    real_total += 1
+                else:
+                    mention[model] += 1
     except OSError:
         pass
-    return leaks, bash, turns, total
+    return real, mention, redacted, bash, turns, tools, real_total
 
 
 def main(argv):
     top_n = 15
+    since = ''
     paths = []
     i = 0
     while i < len(argv):
@@ -99,6 +127,9 @@ def main(argv):
         if a == '--top':
             i += 1
             top_n = int(argv[i]) if i < len(argv) else top_n
+        elif a == '--since':
+            i += 1
+            since = argv[i] if i < len(argv) else since
         elif a in ('-h', '--help'):
             print(__doc__)
             return 0
@@ -106,40 +137,51 @@ def main(argv):
             paths.append(a)
         i += 1
 
-    g_leaks = defaultdict(int)
+    g_real = defaultdict(int)
+    g_mention = defaultdict(int)
+    g_redacted = defaultdict(int)
     g_bash = defaultdict(int)
     g_turns = defaultdict(int)
-    per_session = []  # (leak_total, path)
+    g_tools = defaultdict(int)
+    per_session = []  # (real_total, path)
     n_files = 0
 
     for path in iter_jsonl(paths):
         n_files += 1
-        leaks, bash, turns, total = scan_file(path)
-        for m, v in leaks.items():
-            g_leaks[m] += v
-        for m, v in bash.items():
-            g_bash[m] += v
-        for m, v in turns.items():
-            g_turns[m] += v
-        if total:
-            per_session.append((total, path))
+        real, mention, redacted, bash, turns, tools, real_total = scan_file(
+            path, since)
+        for d, g in ((real, g_real), (mention, g_mention),
+                     (redacted, g_redacted), (bash, g_bash),
+                     (turns, g_turns), (tools, g_tools)):
+            for k, v in d.items():
+                g[k] += v
+        if real_total:
+            per_session.append((real_total, path))
 
-    print(f"scanned {n_files} transcript(s)\n")
-    models = sorted(set(g_leaks) | set(g_bash) | set(g_turns))
+    print(f"scanned {n_files} transcript(s)"
+          + (f" (since {since})" if since else "") + "\n")
+    models = sorted(set(g_real) | set(g_mention) | set(g_turns))
     if not models:
         print("no assistant messages found")
         return 0
 
-    print(f"{'model':<26}{'leaks':>8}{'bash':>8}{'turns':>8}{'leak/turn':>12}")
-    print('-' * 62)
+    print(f"{'model':<26}{'real':>7}{'mention':>9}{'redacted':>10}"
+          f"{'bash':>8}{'turns':>8}{'real/turn':>12}")
+    print('-' * 80)
     for m in models:
-        lk, bc, tn = g_leaks[m], g_bash[m], g_turns[m]
-        rate = f"{lk / tn:.2%}" if tn else "-"
-        print(f"{m:<26}{lk:>8}{bc:>8}{tn:>8}{rate:>12}")
+        rl, mn, rd, bc, tn = (g_real[m], g_mention[m], g_redacted[m],
+                              g_bash[m], g_turns[m])
+        rate = f"{rl / tn:.2%}" if tn else "-"
+        print(f"{m:<26}{rl:>7}{mn:>9}{rd:>10}{bc:>8}{tn:>8}{rate:>12}")
+
+    if g_tools:
+        print("\nreal leaks by leaked tool:")
+        for t, v in sorted(g_tools.items(), key=lambda x: -x[1]):
+            print(f"  {v:>4}  {t}")
 
     if per_session:
         per_session.sort(reverse=True)
-        print(f"\ntop {min(top_n, len(per_session))} sessions by leak count:")
+        print(f"\ntop {min(top_n, len(per_session))} sessions by real leak count:")
         for total, path in per_session[:top_n]:
             print(f"  {total:>4}  {path}")
     return 0

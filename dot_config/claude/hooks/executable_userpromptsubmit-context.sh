@@ -82,6 +82,29 @@ case "$model" in
     ;;
 esac
 
+# tool-call タグ破損バックストップ:
+# 直前 assistant メッセージが未実行 tool call の漏洩(</invoke> 終端・tool_use 不成立)の
+# まま残っていれば警告を注入する。stop-hook 不発(クラッシュ等)時の保険で、
+# 判定基準は stop-hook.ts detectToolcallLeakInText と同一(tail-anchor)。
+leak_block=""
+if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
+  stranded=$(tail -n 50 "$transcript_path" 2>/dev/null \
+    | jq -c -R 'fromjson? // empty' 2>/dev/null \
+    | jq -rs '
+      [ .[] | select(.type == "assistant") ] | last // {} |
+      (.message.content // []) as $c |
+      if ($c | type) != "array" then "no"
+      elif ([$c[] | select(.type == "tool_use")] | length) > 0 then "no"
+      else
+        ([$c[] | select(.type == "text") | .text // ""] | join("\n")
+         | sub("\\s+$"; "")) as $t |
+        if ($t | endswith("</invoke>")) and ($t | contains("<parameter name=")) then "yes" else "no" end
+      end' 2>/dev/null || true)
+  if [ "$stranded" = "yes" ]; then
+    leak_block=$(printf '\n## ⚠ 未実行 tool call の漏洩あり\n直前の assistant 応答で tool call が text に漏洩したまま実行されていない(tool-call タグ破損)。ユーザー入力への対応時、必要ならそのコマンドを前置きテキストなしで実行し直すこと。漏洩 XML は verbatim 引用しない。\n')
+  fi
+fi
+
 git_status=""
 if git -C "${CLAUDE_PROJECT_DIR:-.}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git_status=$(git -C "${CLAUDE_PROJECT_DIR:-.}" status --short 2>/dev/null || true)
@@ -147,8 +170,8 @@ now=$(date '+%Y-%m-%d %H:%M')
 # Single additionalContext payload
 goal_block=""
 [ -n "$goal_line" ] && goal_block=$(printf '\n## %s\n' "$goal_line")
-context=$(printf '%s\n\n%s\n\n## Git status (--short)\n%s%s\n\n---\nCurrent time: %s\n' \
-  "$golden" "$workflow" "$git_status" "$goal_block" "$now")
+context=$(printf '%s\n\n%s\n\n## Git status (--short)\n%s%s%s\n\n---\nCurrent time: %s\n' \
+  "$golden" "$workflow" "$git_status" "$goal_block" "$leak_block" "$now")
 
 if [ "$skip_title" = "1" ]; then
   printf '%s' "$context" | jq -Rs \
