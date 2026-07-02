@@ -376,8 +376,12 @@ else
 fi
 
 # shell 初期化完了を待つ（実測: split 直後の pane run は zsh/zplug 初期化中に
-# 入力が食われて何も実行されないことがある。プロンプト出現を待つか最低 2 秒置く）
-herdr wait output "$CODEX_PANE" --match '[❯$%>]' --regex --timeout 20000 >/dev/null 2>&1 || sleep 2
+# 入力が食われて何も実行されないことがある）。
+# timeout は成功扱いにしない: fresh 環境では zplug が対話プロンプト (Install? [y/N])
+# で停止していることがあり、そのまま送ると codex 起動文字列が read 側に流れて壊れる。
+herdr wait output "$CODEX_PANE" --match '[❯$%>]' --regex --timeout 20000 >/dev/null 2>&1 \
+  || { echo "[guard:shell-not-ready] shell がプロンプトに到達しない — pane read で状態を確認して対処 (zplug 対話プロンプト等)" >&2; \
+       herdr pane read "$CODEX_PANE" --source recent-unwrapped --lines 10 >&2; return 1 2>/dev/null || exit 1; }
 
 # codex 起動。`herdr pane run` はテキスト+Enter を1リクエストで送る
 if [ -n "$_codex_root" ]; then
@@ -398,24 +402,27 @@ fi
 
 ### H-Step 2: 完了検知
 
-`herdr wait output` でプロンプト復帰（`❯` または `›`）を blocking で待つ。
+**一次手段は `wait agent-status`**（Herdr の manifest ベース agent 状態検知）。
+画面文字列マッチと違い、プロンプト行やコマンドエコーによる偽マッチがない。
 tmux 版の5秒ポーリングループは不要。
 
 ```bash
-# timeout は ms。長い調査を依頼した場合は延ばす
-herdr wait output "$CODEX_PANE" --match '[❯›]' --regex --timeout 600000 \
+# codex が working → idle に戻る = 応答完了。timeout は ms、長い調査なら延ばす
+herdr wait agent-status "$CODEX_PANE" --status idle --timeout 600000 \
   || { echo "[guard:wait-timeout] codex 応答待ちがタイムアウト" >&2; return 1 2>/dev/null || exit 1; }
 ```
 
-注: codex 起動直後や作業中も入力枠のグリフが画面に残っていて早期マッチすることがある。
-その場合でも H-Step 4 の送信前ガード（最終行判定）で弾かれるので、少し待ってから
-wait を再実行して待ち直すこと。
+フォールバック（agent 検知が unknown のままの場合のみ）:
+`herdr wait output "$CODEX_PANE" --match '[❯›]' --regex --timeout 600000`。
+ただしこの文字列マッチは**プロンプト行（タイプしたコマンドと ❯ が同居する行）や
+起動直後の入力枠グリフにも即マッチし得る**。早期マッチしても H-Step 4 の送信前
+ガード（最終非空行判定）で弾かれるので、少し待って wait を再実行すること。
 
-注2（偽マッチの罠・実測）: `wait output` は pane に表示された**コマンドのエコー行**にも
-マッチする。任意のマーカー文字列（例: `echo MARKER_OK` の完了検知）を待つ場合、
-タイプした瞬間にコマンド行自身へマッチして「実行完了前」に抜けてしまう。
+注（マーカー偽マッチの罠・実測）: `wait output` は pane に表示された**コマンドの
+エコー行**にもマッチする。任意のマーカー文字列（例: `echo MARKER_OK` の完了検知）を
+待つ場合、タイプした瞬間にコマンド行自身へマッチして「実行完了前」に抜けてしまう。
 マーカー待ちをする時は `echo DONE_MARK''ER_OK` のように「タイプ文字列と出力が
-異なる」形で送ること。本 skill の `[❯›]` プロンプト待ちはコマンド行に含まれないため安全。
+異なる」形で送ること。
 
 ### H-Step 3: 結果読み取り
 
