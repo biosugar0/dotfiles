@@ -41,6 +41,32 @@ if [[ ! -d "$HOME/.config/tmux/plugins/tpm" ]]; then
 	git clone https://github.com/tmux-plugins/tpm "$HOME/.config/tmux/plugins/tpm"
 fi
 
+# Herdr integrations (agent の session/state 報告 hook を配置する)
+# claude: ~/.config/claude/hooks/herdr-agent-state.sh (installer 管理、chezmoi 非管理)
+#         settings.json への hook 登録は settings.json.tmpl 側に同一文字列で定義済み
+# codex:  ~/.codex/herdr-agent-state.sh
+if command -v herdr &>/dev/null; then
+	echo "Installing herdr integrations..."
+	# CLAUDE_CONFIG_DIR 未設定の clean env では installer が ~/.claude 側に hook を
+	# 置き、settings.json.tmpl の参照先 (~/.config/claude) と食い違って SessionStart
+	# hook が exit 127 で壊れるため、明示的に揃える
+	CLAUDE_CONFIG_DIR="$HOME/.config/claude" herdr integration install claude || true
+	if command -v codex &>/dev/null; then
+		herdr integration install codex || true
+	fi
+	# 公式 agent skill は AGPL のため repo に vendor せず、インストール時に取得する
+	mkdir -p "$HOME/.config/claude/skills/herdr"
+	curl -fsSL https://raw.githubusercontent.com/ogulcancelik/herdr/master/SKILL.md \
+		-o "$HOME/.config/claude/skills/herdr/SKILL.md" ||
+		echo "note: herdr SKILL.md download failed (retry: install.sh or fetch manually)"
+	# worktree-setup plugin (worktree.created イベントで wt.copy/wt.hook を適用)
+	# plugin registry は server 側 state のため、server 未起動だと失敗する
+	if ! herdr plugin link "$HOME/.config/herdr/plugins/worktree-setup" >/dev/null 2>&1; then
+		echo "note: herdr server not running. After starting herdr, run:"
+		echo "  herdr plugin link ~/.config/herdr/plugins/worktree-setup"
+	fi
+fi
+
 
 # playwright-ext-token
 DOTFILES_DIR="$HOME/ghq/github.com/biosugar0/dotfiles"

@@ -1,0 +1,114 @@
+# =============================================================================
+# Herdr configuration — chezmoi 管理 (dotfiles: dot_config/herdr/config.toml)
+#
+# tmux (dot_config/tmux/tmux.conf.tmpl) のキーバインド思想を引き継ぎつつ、
+# Herdr ネイティブ機能（サイドバー/agent 検知/worktree/セッション永続化）で
+# 置き換えられるものは置き換える方針。
+#   - claude-count.sh / claude-pane-picker.sh → サイドバー + agent バインド
+#   - tmux-resurrect/continuum               → server session + resume_agents_on_restore
+#   - M-' fzf session 切替                    → workspace picker / next_workspace
+# 全項目のリファレンス: `herdr --default-config` / https://herdr.dev/docs/configuration/
+#
+# 注意: ~/.config/herdr/ には socket・log・plugins.json 等の runtime state も
+# 置かれる。chezmoi で管理するのはこの config.toml のみ。
+# =============================================================================
+
+onboarding = false
+
+[theme]
+# "terminal" は外側ターミナル (WezTerm) のカラースキームをそのまま使う。
+# 既存の WezTerm 資産に馴染ませる意図。好みで catppuccin / tokyo-night 等に変更可。
+name = "terminal"
+
+[terminal]
+# tmux の split-window -c "#{pane_current_path}" 相当: 新規 pane/tab は元の cwd を継承
+new_cwd = "follow"
+
+[keys]
+# prefix は tmux と同じ ctrl+b (筋肉記憶維持)。デフォルトのまま。
+#
+# tmux で使っていた Alt 系ダイレクトキーを直バインドとして追加する。
+# (AeroSpace が Alt+C / Alt+Shift+C を予約しているため tmux 時代から
+#  この Alt セットは衝突しないことが確認済み)
+#
+# tmux M-v / M-s: ペイン分割 (カレントパス維持は new_cwd = "follow" が担保)
+split_vertical = ["prefix+v", "alt+v"]
+split_horizontal = ["prefix+minus", "alt+s"]
+
+# tmux M-Enter: 新規 window → Herdr では tab
+new_tab = ["prefix+c", "alt+enter"]
+
+# tmux M-] / M-[: window 移動 → tab 移動
+next_tab = ["prefix+n", "alt+]"]
+previous_tab = ["prefix+p", "alt+["]
+
+# tmux M-a (choose-tree) / M-' (fzf session 切替) 相当
+workspace_picker = ["prefix+w", "alt+a"]
+next_workspace = "alt+'"
+
+# tmux M-; (fzf window 切替) 相当: navigate モード
+goto = ["prefix+g", "alt+;"]
+
+# tmux M-p (claude-pane-picker) 相当: agent を直接巡回する。
+# サイドバー (prefix+b でトグル) が常時一覧+状態表示を担う。
+next_agent = "alt+p"
+previous_agent = "alt+shift+p"
+
+# worktree ネイティブ運用 (new_worktree は既定 prefix+shift+g)。
+# 既存 worktree を workspace として開き直すキーを追加。
+open_worktree = "prefix+shift+o"
+
+# ghq リポジトリを fzf で選んで workspace として開く
+# (zsh の `g` エイリアス + tmux セッション運用の Herdr 版)
+[[keys.command]]
+key = "prefix+shift+f"
+type = "pane"
+command = "herdr-ghq-open"
+
+# 並列タスク起動: branch 名を入力 → git wt (wt.copy/wt.hook 適用) →
+# workspace 化 (repo 配下にグルーピング) → root pane で claude 起動、まで一発
+[[keys.command]]
+key = "prefix+t"
+type = "pane"
+command = "herdr-task-new"
+
+[worktrees]
+# Herdr が worktree create で checkout を置く場所。
+# CLI の git-wt (.wt/ 内配置) とは独立した仕組みなので混同しないこと。
+# Herdr 上で並列エージェントを回す際はこちら、シェル作業は git wt を使う。
+directory = "~/.herdr/worktrees"
+
+[ui]
+# 「今どのエージェントが自分を必要としているか」を最上位に出す attention queue
+agent_panel_sort = "priority"
+
+# 並列でタブを量産するので名前入力プロンプトは省略 (rename は prefix+shift+t)
+prompt_new_tab_name = false
+
+# pane 名未設定時に検知した agent 名を境界線に表示 (tmux pane-border 表示の代替)
+show_agent_labels_on_pane_borders = true
+
+[ui.toast]
+# WezTerm のデスクトップ通知として配送 (OSC 777 経由の osc-notify.sh と同系統)
+delivery = "terminal"
+
+[ui.sound]
+enabled = true
+
+[ui.sound.agents]
+# Claude Code は settings.json の Stop/Notification hook (afplay) が既に
+# サウンドを鳴らすため、Herdr 側は重複を避けて mute する
+claude = "off"
+
+[session]
+# Herdr server 再起動後、対応 agent を元の会話セッションに復帰させる
+# (tmux-resurrect/continuum が担っていた復元の agent 版)
+resume_agents_on_restore = true
+
+[experimental]
+# 日本語 IME 対策 (macOS):
+# prefix モード中は ASCII 入力ソースへ一時切替 (IME ON のまま prefix が効く)
+switch_ascii_input_source_in_prefix = true
+# Claude Code / codex が自前カーソルを描く際も IME 候補ウィンドウが追従するように
+reveal_hidden_cursor_for_cjk_ime = true
+cjk_ime_agents = ["claude", "codex"]

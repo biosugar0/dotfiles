@@ -58,6 +58,17 @@ fi
 title=$(sanitize "$title")
 body=$(sanitize "$body")
 
+# Herdr 内では OSC 777 passthrough に依存せず socket API で通知する
+# ([ui.toast] delivery の設定に従って配送される。sound は settings.json の
+#  afplay hook と二重になるため none)。server 不達時は従来経路へフォールスルー。
+if [ "${HERDR_ENV:-}" = "1" ] && command -v herdr >/dev/null 2>&1; then
+  # toast 無効時は {"shown":false} が exit 0 で返るため、実際に表示された時のみ完了扱い
+  herdr_out=$(herdr notification show "$title" --body "$body" --sound none 2>/dev/null || true)
+  if printf '%s' "$herdr_out" | grep -q '"shown":true'; then
+    exit 0
+  fi
+fi
+
 # Hook channel (2.1.141+): JSON で返すと Claude Code が OSC を代理出力する。
 # 受理されるのは生 OSC のみ (DCS で wrap すると allowlist で弾かれる)。
 # tmux 内かどうかは Claude Code 側で検出して DCS passthrough まで行ってくれる。
