@@ -10,9 +10,12 @@
 
 input=$(cat)
 command -v jq >/dev/null 2>&1 || exit 0
+# 発火実績を JSONL 記録(cc-harness-metrics 集計用)。lib 欠損時は no-op。
+. "$(dirname "$0")/lib/harness-log.sh" 2>/dev/null || harness_log() { :; }
 tool=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 
 deny() {
+  harness_log "guard-verification-write" "deny" "$tool" "$(printf '%s' "$input" | jq -r '.session_id // empty')"
   jq -n '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",

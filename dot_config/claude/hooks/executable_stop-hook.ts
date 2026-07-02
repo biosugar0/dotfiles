@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write=/tmp --allow-net --allow-env --allow-run
+#!/usr/bin/env -S deno run --allow-read --allow-write=/tmp,${HOME}/.local/state --allow-net --allow-env --allow-run
 
 import Anthropic from "npm:@anthropic-ai/sdk";
 import { readAll } from "jsr:@std/io@0.224/read-all";
@@ -9,11 +9,13 @@ import {
   isRealUserMessage,
   resolveAnthropicAuth,
 } from "./lib/session-context.ts";
+import { harnessLog } from "./lib/harness-log.ts";
 
 interface StopHookInput {
   stop_hook_active?: boolean;
   last_assistant_message?: string;
   transcript_path?: string;
+  session_id?: string;
 }
 
 interface ContentBlock {
@@ -718,6 +720,8 @@ async function main(): Promise<void> {
       : null;
     const lastMessage = input.last_assistant_message || "";
     const projectDir = Deno.env.get("CLAUDE_PROJECT_DIR") ?? Deno.cwd();
+    const hlog = (event: string, detail = "") =>
+      harnessLog("stop-hook", event, detail, input.session_id ?? "");
 
     // ─── tool-call タグ破損（Opus 4.8）の事後自動復旧 ───
     // harness の auto-retry で復旧せずターン終端に破損が残った場合、block-to-continue で
@@ -758,6 +762,7 @@ async function main(): Promise<void> {
           // Bash 限定: sonnet-bash-runner(model:sonnet固定subagent)への委譲を提案する。
           // 直接 Bash を出し直す(=同じ破損しやすい経路のリトライ)より、Sonnet実行に切り替える方が
           // 確実(このセッション実績でSonnetのleakは0件)。Write/Edit/Agent等は委譲先が無いため対象外。
+          await hlog("block:toolcall_leak", leak.tool);
           const delegateHint = leak.tool === "Bash"
             ? " 可能なら直接出し直さず、sonnet-bash-runner subagent(Agent tool)にこのコマンドの実行を委譲することを検討せよ(Sonnet 5固定でこの破損が起きない)。"
             : "";
@@ -817,10 +822,14 @@ async function main(): Promise<void> {
     }
 
     // stop_hook_active 時の早期 exit（Goal 駆動中は除く）
+    // 早期 allow も記録する: cc-harness-metrics の block rate 分母が
+    // 「ログされた decision」に偏ると実際より block 率が高く見えるため。
     if (input.stop_hook_active && !goalState) {
+      await hlog("allow:stop_hook_active");
       Deno.exit(0);
     }
     if (!lastMessage) {
+      await hlog("allow:empty_message");
       Deno.exit(0);
     }
 
@@ -833,6 +842,7 @@ async function main(): Promise<void> {
       : false;
 
     if (waitingByText || waitingByTranscript) {
+      await hlog("allow:background_wait");
       if (goalState && gPath) {
         await writeGoalState(gPath, goalState);
       }
@@ -864,6 +874,7 @@ async function main(): Promise<void> {
         goalState.targetTurns && goalState.iterations > goalState.targetTurns
       ) {
         notifyStop("ゴール中断: ターン上限到達");
+        await hlog("block:goal_turn_limit");
         await clearGoalState(gPath);
         console.log(
           JSON.stringify({
@@ -881,6 +892,7 @@ async function main(): Promise<void> {
         const spinCount = countConsecutiveIdentical(goalState.msgHashes);
         if (spinCount >= 5) {
           notifyStop("ゴール中断: 空転検知");
+          await hlog("block:goal_spin");
           await clearGoalState(gPath);
           console.log(
             JSON.stringify({
@@ -901,6 +913,7 @@ async function main(): Promise<void> {
         const errCount = countConsecutiveIdentical(goalState.errorHashes);
         if (errCount >= 3) {
           notifyStop("ゴール中断: 同一エラー反復");
+          await hlog("block:goal_error_stuck");
           await clearGoalState(gPath);
           console.log(
             JSON.stringify({
@@ -931,6 +944,7 @@ async function main(): Promise<void> {
           const dirty = await getGitDirtyCount(projectDir);
           if (dirty === 0) {
             notifyStop(`検証通過: ${goalState.condition}`);
+            await hlog("allow:goal_verified");
             await clearGoalState(gPath);
             Deno.exit(0); // stop を許可（決定的にゴール達成）
           }
@@ -951,6 +965,7 @@ async function main(): Promise<void> {
           ); // cap: 2^5=32
           const interval = 2 ** backoffExp;
           if (goalState.iterations % interval !== 0) {
+            await hlog("block:goal_backoff");
             await writeGoalState(gPath, goalState);
             console.log(
               JSON.stringify({
@@ -969,6 +984,7 @@ async function main(): Promise<void> {
 
     const auth = await resolveAnthropicAuth();
     if (!auth) {
+      await hlog("allow:no_auth");
       Deno.exit(0);
     }
     const client = new Anthropic({
@@ -1030,7 +1046,7 @@ async function main(): Promise<void> {
       }
     }
 
-    // evaluator APPROVED → distill-memory 促し
+    // evaluator PASS → distill-memory 促し
     try {
       const gatePath = `${projectDir}/ai/state/workflow-gate.json`;
       const gateContent = await Deno.readTextFile(gatePath);
@@ -1053,7 +1069,7 @@ async function main(): Promise<void> {
         }
         if (!hasRecentMemory) {
           annotations.push(
-            "Evaluator APPROVED: distill-memory skill を発動して教訓を記録してから終了すること。記録すべき教訓がなければスキップ可。",
+            "Evaluator PASS: distill-memory skill を発動して教訓を記録してから終了すること。記録すべき教訓がなければスキップ可。",
           );
         }
       }
@@ -1120,6 +1136,7 @@ async function main(): Promise<void> {
 
     const toolBlock = response.content.find((b) => b.type === "tool_use");
     if (!toolBlock || toolBlock.type !== "tool_use") {
+      await hlog("allow:no_decision");
       Deno.exit(0);
     }
 
@@ -1127,6 +1144,7 @@ async function main(): Promise<void> {
 
     if (decision.should_stop) {
       // ゴール達成 or 不可能 or 通常の停止
+      await hlog("allow:stop");
       if (goalState && gPath) {
         await clearGoalState(gPath);
       }
@@ -1143,6 +1161,7 @@ async function main(): Promise<void> {
           detectReactorGoal(decision.goal_condition) &&
           !classifyVerifiableGoal(decision.goal_condition)
         ) {
+          await hlog("block:goal_reactor_monitor");
           console.log(
             JSON.stringify({
               decision: "block",
@@ -1167,6 +1186,7 @@ async function main(): Promise<void> {
         });
       }
 
+      await hlog("block:stop_gate", (decision.reason ?? "").slice(0, 120));
       console.log(
         JSON.stringify({
           decision: "block",
@@ -1180,6 +1200,8 @@ async function main(): Promise<void> {
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    // hlog は input parse 前に throw した場合スコープ外のため、直接呼ぶ
+    await harnessLog("stop-hook", "allow:error", msg.slice(0, 120));
     await Deno.stderr.write(
       new TextEncoder().encode(`Stop hook error (allowing stop): ${msg}\n`),
     );

@@ -3,6 +3,8 @@
 # Prevents agent from silencing lint errors by modifying config instead of fixing code
 
 input=$(cat)
+# 発火実績を JSONL 記録(cc-harness-metrics 集計用)。lib 欠損時は no-op。
+. "$(dirname "$0")/lib/harness-log.sh" 2>/dev/null || harness_log() { :; }
 
 file_path=$(echo "$input" | jq -r '.tool_input.file_path // empty')
 [ -z "$file_path" ] && exit 0
@@ -25,6 +27,7 @@ case "$basename" in
   *) exit 0 ;;
 esac
 
+harness_log "block-config-edit" "deny" "$basename" "$(echo "$input" | jq -r '.session_id // empty')"
 jq -n '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",

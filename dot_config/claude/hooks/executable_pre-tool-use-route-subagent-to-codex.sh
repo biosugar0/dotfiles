@@ -30,6 +30,9 @@ esac
 # [no-codex] マーカーはフォールバック経路（codex失敗後の再委譲用）として素通し
 [ "$is_nocodex" = "1" ] && exit 0
 
+# 発火実績を JSONL 記録(cc-harness-metrics 集計用)。lib 欠損時は no-op。
+. "$(dirname "$0")/lib/harness-log.sh" 2>/dev/null || harness_log() { :; }
+harness_log "route-subagent-to-codex" "reroute" "" "$(echo "$input" | jq -r '.session_id // empty')"
 echo "$input" | jq '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",

@@ -5,6 +5,8 @@
 # codex-tmux skill Step 5 のマーカー生成と同じ置換規則を保つこと。
 
 input=$(cat)
+# 発火実績を JSONL 記録(cc-harness-metrics 集計用)。lib 欠損時は no-op。
+. "$(dirname "$0")/lib/harness-log.sh" 2>/dev/null || harness_log() { :; }
 
 command=$(echo "$input" | jq -r '.tool_input.command // empty')
 
@@ -31,6 +33,7 @@ review_marker_glob() {
 # gh pr create をチェック（cd && gh pr create 等のパターンも検出）
 if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
   hook_cwd=$(echo "$input" | jq -r '.cwd')
+  sid=$(echo "$input" | jq -r '.session_id // empty')
   found=false
 
   # コマンド内の絶対パスを抽出し、git リポジトリなら直接チェック
@@ -80,16 +83,19 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
 
       if [ "$gate_sha" != "$current_sha" ]; then
         # head が変わっている（evaluator 後にコミットされた）→ 警告のみ、ブロックしない
+        harness_log "block-pr-without-review" "warn:gate_head_changed" "gate=$gate_sha current=$current_sha" "$sid"
         echo "evaluator: HEAD が変わっています（gate: $gate_sha, current: $current_sha）" >&2
       elif [ "$gate_status" = "FAIL" ]; then
         # evaluator FAIL → 警告のみ、ブロックしない（soft recommendation）
         gate_summary=$(jq -r '.evaluator.summary // ""' "$gate_file")
+        harness_log "block-pr-without-review" "warn:gate_fail" "$gate_summary" "$sid"
         echo "evaluator: FAIL — $gate_summary（修正推奨）" >&2
       fi
     else
       # workflow-gate.json が存在しない → 変更が多い場合のみ evaluator 推奨
       changed_count=$(git -C "$hook_cwd" diff --name-only origin/main...HEAD 2>/dev/null | wc -l | tr -d ' ')
       if [ "${changed_count:-0}" -ge 5 ]; then
+        harness_log "block-pr-without-review" "warn:gate_missing" "changed=${changed_count}" "$sid"
         echo "evaluator: 未実施（変更ファイル ${changed_count} 件）。/evaluator で品質評価を推奨。" >&2
       fi
     fi
@@ -104,6 +110,7 @@ if echo "$command" | grep -qE '(^|[;&|] *)gh pr create( |$)'; then
     else
       reason="Codex reviewが未実施。先にcodex-tmux skillでレビューを受けてからPRを作成すること。codex が使えない場合は /code-review xhigh でレビューし、.code-review-done--{repo}--{branch}--{hash} マーカーを生成すること（詳細は codex-tmux skill のフォールバック節）。"
     fi
+    harness_log "block-pr-without-review" "deny" "no-review-marker" "$sid"
     jq -n --arg reason "$reason" '{
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
