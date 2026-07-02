@@ -519,6 +519,99 @@ export function decideLeakRecovery(
   };
 }
 
+// ─── 漏洩 Bash の代行実行（自動修正） ───
+// 再送指示はモデルの再送時に再破損するリスクを残すため、同一破損の初回検知時に
+// 限り hook 自身が抽出コマンドを実行して結果を返す(1ターン節約 + 再送破損ゼロ)。
+// 2回目以降は二重実行(副作用の重複)を防ぐため従来の再送指示にフォールバックする。
+// bypassPermissions 運用でも settings の deny リスト相当は尊重する(EXEC_DENY_RES)。
+// Bash tool の永続シェルと cwd/env は完全一致しない(cwd は CLAUDE_PROJECT_DIR 固定)
+// ため、その旨を出力に明記してモデル側で妥当性を判断させる。
+const EXEC_DENY_RES: RegExp[] = [
+  /\brm\s+(-\w*\s+)*-\w*[rf]\w*\s+(\/|~)(\s|$)/, // rm -rf / ・ rm -rf ~
+  /\bsudo\b/,
+  /\bdd\b/,
+  /\bmkfs\b/,
+  /\bfdisk\b/,
+  />+\s*\/dev\//,
+  /\bchmod\s+777\s+\//,
+  /\bchown\s+root\b/,
+  /--no-verify\b/,
+  /\b(npm|deno)\s+publish\b/,
+  /\bgit\s+push\b[^\n]*(\s-f\b|--force)/,
+  /\bdocker\s+system\s+prune\b/,
+  /\brm\s+(-\w+\s+)*\.git(\s|$|\/)/,
+];
+
+export function isExecDenied(cmd: string): boolean {
+  return EXEC_DENY_RES.some((re) => re.test(cmd));
+}
+
+const EXEC_TIMEOUT_MS = Number(
+  Deno.env.get("CLAUDE_LEAK_EXEC_TIMEOUT_MS") ?? "20000",
+);
+
+function decodeOutput(
+  out: { stdout: Uint8Array; stderr: Uint8Array },
+): string {
+  const dec = new TextDecoder();
+  const stdout = dec.decode(out.stdout).trim();
+  const stderr = dec.decode(out.stderr).trim();
+  let text = stdout;
+  if (stderr) text += (text ? "\n" : "") + "--- stderr ---\n" + stderr;
+  return text;
+}
+
+// 注意: signal オプションによる SIGTERM では、bash の孫プロセスが pipe を握った
+// まま生き残ると output() が解決せず hook 全体の timeout(30s) を食い潰して block
+// 自体が届かなくなる(実測で確認)。spawn + 自前レースで待ち時間を確実に打ち切る。
+async function execLeakedCommand(
+  cmd: string,
+  cwd: string,
+): Promise<
+  { code: number | null; output: string; timedOut: boolean } | null
+> {
+  try {
+    const child = new Deno.Command("bash", {
+      args: ["-c", cmd],
+      cwd,
+      stdin: "null",
+      stdout: "piped",
+      stderr: "piped",
+    }).spawn();
+    const outP = child.output();
+    let timerId: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = await Promise.race([
+      outP.then(() => false as const),
+      new Promise<true>((r) => {
+        timerId = setTimeout(() => r(true), EXEC_TIMEOUT_MS);
+      }),
+    ]);
+    clearTimeout(timerId);
+    if (timedOut) {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // 既に終了済み
+      }
+      // kill 後も孫プロセスが pipe を保持しうるため、出力回収は短時間だけ試みる
+      const late = await Promise.race([
+        outP,
+        new Promise<null>((r) => setTimeout(() => r(null), 1500)),
+      ]);
+      return {
+        code: null,
+        output: late ? decodeOutput(late) : "",
+        timedOut: true,
+      };
+    }
+    const out = await outP;
+    return { code: out.code, output: decodeOutput(out), timedOut: false };
+  } catch {
+    // spawn 失敗 → 呼び出し側で再送指示にフォールバック
+    return null;
+  }
+}
+
 export function detectSpin(hashes: string[]): boolean {
   if (hashes.length < 3) return false;
   const last3 = hashes.slice(-3);
@@ -773,11 +866,53 @@ async function main(): Promise<void> {
           // 初回
         }
         const { action, state, chained } = decideLeakRecovery(leak.sig, prev);
+        // 連鎖モード: 破損 XML が履歴に蓄積するとモデルが模倣して再発率が上がる
+        // (self-poisoning)。脱出は「終了→resume」を第一候補にする: SessionEnd hook の
+        // cc-transcript-sanitize が transcript の破損 XML を無害化するため、
+        // resume 後は文脈を保ったまま毒だけ抜ける(/clear は全損なので次点)。
+        const chainNote = chained
+          ? `\n\n⚠️ このセッションで累計 ${state.total} 回目の破損（連鎖モード）。壊れた出力が履歴に残るほど再発率が上がる。今回の復旧後、キリの良い所でユーザーに「セッションをexitして claude --resume で再開」を提案せよ（SessionEnd hook が破損履歴を自動無害化するため、文脈を保ったまま毒を抜ける。代替: /model sonnet）。`
+          : "";
         if (action === "retry") {
           try {
             await Deno.writeTextFile(recPath, JSON.stringify(state));
           } catch {
             // best-effort
+          }
+          // 代行実行: Bash の初回検知(count===1)のみ hook が直接実行して結果を返す。
+          // 再送指示はモデル再送時の再破損リスクを残すため、実行できるなら実行が優る。
+          // 2回目以降(同一sig)は副作用の二重実行を防ぐため再送指示へ。deny 該当・
+          // 実行失敗(タイムアウト等)も再送指示にフォールバックする。
+          if (
+            leak.tool === "Bash" && leak.command && state.count === 1 &&
+            !isExecDenied(leak.command)
+          ) {
+            const res = await execLeakedCommand(leak.command, projectDir);
+            if (res !== null) {
+              await hlog(
+                res.timedOut
+                  ? "block:toolcall_leak_exec_timeout"
+                  : chained
+                  ? "block:toolcall_leak_exec_chained"
+                  : "block:toolcall_leak_exec",
+                res.timedOut ? "" : `code=${res.code}`,
+              );
+              const resultBlock = res.timedOut
+                ? `代行実行を試みたが ${EXEC_TIMEOUT_MS}ms でタイムアウトし kill した（**部分実行の可能性あり**）。同じコマンドを盲目的に再実行せず、冪等性・現在の状態を確認してから必要な操作を行え。\n回収できた出力:\n\`\`\`\n${
+                  truncateHeadTail(res.output || "(なし)", 2000)
+                }\n\`\`\``
+                : `漏洩コマンドは hook が代行実行済み（cwd=${projectDir}。Bash tool の永続シェルとは cwd/env が異なりうる点は考慮せよ）。**同じコマンドを再実行するな**。以下の結果を踏まえて作業を継続せよ。\nexit code: ${res.code}\n\`\`\`\n${
+                  truncateHeadTail(res.output || "(出力なし)", 3000)
+                }\n\`\`\``;
+              console.log(
+                JSON.stringify({
+                  decision: "block",
+                  reason:
+                    `⚠️ tool-call タグ破損を検知（Bash が未実行のまま text に漏洩）。${resultBlock}${chainNote}`,
+                }),
+              );
+              Deno.exit(0);
+            }
           }
           const cmdBlock = leak.command
             ? `\n\n再実行すべき内容:\n\`\`\`\n${leak.command.slice(0, 1500)}\n\`\`\``
@@ -791,14 +926,6 @@ async function main(): Promise<void> {
           );
           const delegateHint = leak.tool === "Bash"
             ? " 可能なら直接出し直さず、sonnet-bash-runner subagent(Agent tool)にこのコマンドの実行を委譲することを検討せよ(Sonnet 5固定でこの破損が起きない)。"
-            : "";
-          // 連鎖モード: 破損 XML が履歴に蓄積するとモデルが模倣して再発率が上がる
-          // (self-poisoning)。復旧を試みつつ、セッション脱出をユーザーに提案させる。
-          // 脱出は「終了→resume」を第一候補にする: SessionEnd hook の
-          // cc-transcript-sanitize が transcript の破損 XML を無害化するため、
-          // resume 後は文脈を保ったまま毒だけ抜ける(/clear は全損なので次点)。
-          const chainNote = chained
-            ? `\n\n⚠️ このセッションで累計 ${state.total} 回目の破損（連鎖モード）。壊れた出力が履歴に残るほど再発率が上がる。今回の復旧後、キリの良い所でユーザーに「セッションをexitして claude --resume で再開」を提案せよ（SessionEnd hook が破損履歴を自動無害化するため、文脈を保ったまま毒を抜ける。代替: /model sonnet）。`
             : "";
           console.log(
             JSON.stringify({

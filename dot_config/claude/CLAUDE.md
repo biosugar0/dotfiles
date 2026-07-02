@@ -54,8 +54,11 @@ non-Opus セッションの初回ターンにも入ることがある。Sonnet/F
 
 背景メモ（モデル非依存の周辺機構）:
 - **ターン内自動リトライ**: harness 組み込み（malformed 検知で retry 注入）。実測で破損の約4割を回収。
-- **事後自動復旧**: `stop-hook` がターン終端の stranded 破損を検知し、前置きゼロで出し直すよう block 注入。
-  セッション累計3回で連鎖モードと判定し「exit→resume」誘導にエスカレート、同一破損2連続で give-up。
+- **事後自動復旧**: `stop-hook` がターン終端の stranded 破損を検知。Bash は同一破損の初回に限り
+  hook が漏洩コマンドを**代行実行**して結果を返す（再送時の再破損リスクをゼロにする。deny リスト相当を
+  尊重・20s キャップ・timeout 時は部分実行の可能性を明示）。2回目以降・他ツール・deny 該当は
+  前置きゼロで出し直すよう block 注入。セッション累計3回で連鎖モードと判定し「exit→resume」誘導に
+  エスカレート、同一破損2連続で give-up。
 - **自動デトックス**: SessionEnd hook が `cc-transcript-sanitize` を実行し、transcript 内の破損 XML を
   `[toolcall-leak redacted: <tool>]` に置換（構造・uuid 保持、`.pre-sanitize.bak` 残置、冪等）。
   resume 時にモデルへ渡る履歴から毒が消える。手動実行・`--dry-run` も可。
