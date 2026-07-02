@@ -1,0 +1,2 @@
+- 既定 Opus 稼働時、ls/pwd/cat/echo 等の一瞬で終わる軽量コマンド以外の Bash は sonnet-bash-runner subagent(Agent tool)に委譲する（tool-call タグ破損="court"化は単純な gh 一発コマンドやスクリプト呼び出し自体でも実データで確認済みのため、「重いコマンドだけ」では不十分。破損自体は stop-hook が事後自動復旧するが、まず委譲で頻度を下げる）
+- tool 呼び出しが malformed/parse 失敗した時は同一コマンドを verbatim 再送しない（再破損する）。スクリプト化するか短く分割して出し直す

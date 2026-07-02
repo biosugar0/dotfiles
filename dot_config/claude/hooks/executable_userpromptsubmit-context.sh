@@ -41,6 +41,24 @@ fi
 golden=$(cat ~/.config/claude/hooks/data/golden-rules.txt 2>/dev/null || true)
 workflow=$(cat ~/.config/claude/hooks/data/workflow-instructions.md 2>/dev/null || true)
 
+# モデル別ルールの出し分け:
+# sonnet-bash-runner 委譲・tool-call タグ破損対策は Opus 固有。モデルは自分が何かを
+# 確実には知らないため「Opus 稼働時は…」という自己条件付きルールは機能しない。
+# transcript の直近 assistant メッセージから現行モデルを決定的に判定して注入を切り替える。
+# 判定不能（セッション先頭・読取失敗）は既定 main=Opus に合わせて注入側に倒す。
+model=""
+if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
+  model=$(tail -n 100 "$transcript_path" 2>/dev/null \
+    | jq -r 'select(.type == "assistant") | .message.model // empty' 2>/dev/null \
+    | tail -n 1 || true)
+fi
+case "$model" in
+  ""|*opus*)
+    opus_rules=$(cat ~/.config/claude/hooks/data/golden-rules-opus.txt 2>/dev/null || true)
+    [ -n "$opus_rules" ] && golden=$(printf '%s\n%s' "$golden" "$opus_rules")
+    ;;
+esac
+
 git_status=""
 if git -C "${CLAUDE_PROJECT_DIR:-.}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git_status=$(git -C "${CLAUDE_PROJECT_DIR:-.}" status --short 2>/dev/null || true)
