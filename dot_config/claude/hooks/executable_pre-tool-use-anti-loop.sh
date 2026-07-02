@@ -10,6 +10,8 @@
 
 input=$(cat)
 command -v jq >/dev/null 2>&1 || exit 0
+# 発火実績を JSONL 記録(cc-harness-metrics 集計用)。lib 欠損時は no-op。
+. "$(dirname "$0")/lib/harness-log.sh" 2>/dev/null || harness_log() { :; }
 cwd=$(echo "$input" | jq -r '.cwd // empty')
 [ -n "$cwd" ] || exit 0
 # loop.json は git root 基準(ai-run-check と揃える)。サブディレクトリ起動でも正しく読む。
@@ -31,6 +33,7 @@ case "$max" in ''|*[!0-9]*) max=3 ;; esac
 reason="同一失敗が ${cnt} 回連続(sig=${sig})。パッチを当て直すループの可能性。広い編集を続ける前に、決定的な repro/test/harness を作るか、仮説を ranked で立て直す(weakest_assumption の falsifiable check)。解除: ai-run-check --reset。"
 
 if [ "${AI_ANTILOOP_ENFORCE:-0}" = "1" ]; then
+  harness_log "anti-loop" "deny" "sig=${sig} cnt=${cnt}" "$(echo "$input" | jq -r '.session_id // empty')"
   jq -n --arg r "$reason" '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
@@ -39,6 +42,7 @@ if [ "${AI_ANTILOOP_ENFORCE:-0}" = "1" ]; then
     }
   }'
 else
+  harness_log "anti-loop" "warn" "sig=${sig} cnt=${cnt}" "$(echo "$input" | jq -r '.session_id // empty')"
   echo "⚠ anti-loop(warn): $reason" >&2
 fi
 exit 0

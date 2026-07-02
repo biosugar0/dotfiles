@@ -5,6 +5,8 @@
 # リポジトリ外のファイル（plans等）は常に許可
 
 input=$(cat)
+# 発火実績を JSONL 記録(cc-harness-metrics 集計用)。lib 欠損時は no-op。
+. "$(dirname "$0")/lib/harness-log.sh" 2>/dev/null || harness_log() { :; }
 
 file_path=$(echo "$input" | jq -r '.tool_input.file_path // empty')
 [ -z "$file_path" ] && exit 0
@@ -28,6 +30,7 @@ if echo "$remote" | grep -qi "dotfiles"; then
 fi
 
 # mainブランチでの編集をブロック
+harness_log "block-main" "deny" "$file_path" "$(echo "$input" | jq -r '.session_id // empty')"
 jq -n '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",

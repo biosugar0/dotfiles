@@ -13,11 +13,11 @@
 ### Hooks
 | Hook | 検証方法 | 除去候補の条件 |
 |------|---------|---------------|
-| stop-hook | `~/.config/claude/projects/**/*.jsonl` の hook_progress から stop block 率を計算 | ブロック率 < 5% が3ヶ月続く |
-| block-main | `projects/**/*.jsonl` の hook_progress で発火回数を確認 | 発火がない（行動変化済み） |
+| stop-hook | `cc-harness-metrics` の stop-hook block rate | ブロック率 < 5% が3ヶ月続く |
+| block-main | `cc-harness-metrics` で deny 回数を確認 | 発火がない（行動変化済み） |
 | block-config-edit | 同上 | 発火がない |
-| block-pr-without-review | marker file の作成頻度を確認 | 常にreview後にPRを作成している |
-| eol hook | `projects/**/*.jsonl` の PostToolUse hook_progress を確認 | 修正がほぼ発生しない |
+| block-pr-without-review | `cc-harness-metrics` の deny/warn + marker file の作成頻度 | 常にreview後にPRを作成している |
+| eol hook | `projects/**/*.jsonl` の PostToolUse 出力を確認 | 修正がほぼ発生しない |
 
 ### Skills
 | Skill | 検証方法 | 簡素化の条件 |
@@ -35,17 +35,20 @@
 
 ### データソース
 
-- **主**: `~/.config/claude/projects/**/*.jsonl` — hook_progress イベント
+- **主（hook 実績）**: `cc-harness-metrics` — hook 自己ログ `${XDG_STATE_HOME:-~/.local/state}/claude/harness-events.jsonl` の集計。
+  transcript には hook の deny/block 決定が記録されない（hook stdout は jsonl に残らない）ため、hook 自身が
+  `hooks/lib/harness-log.{sh,ts}` 経由で残すイベントが唯一の実測データ。
+- **主（skill 実績）**: `~/.config/claude/projects/**/*.jsonl` — `"skill":"<name>"` の出現を rg で集計（Skill tool 呼び出し回数）
 - **補助**: `ai/log/sessions/` — compact 頻度・セッション継続時間
 - **組み込み**: `/insights` コマンドのセッション分析レポート
 
 ### 手順
 
-1. `/insights` でセッション分析レポートを取得
-2. `~/.config/claude/projects/**/*.jsonl` から hook_progress イベントを集計
-3. ai/log/sessions/ は compact 頻度・セッション継続時間の補助データとして使用
-4. 各hookの発火・ブロック回数を集計
-5. 各skillの使用頻度と効果を分析
+1. `cc-harness-metrics --days 30` で hook の発火・ブロック実績を取得
+2. `~/.config/claude/projects/**/*.jsonl` から skill 使用回数を集計（`rg -o '"skill":\s*"[^"]+"' | sort | uniq -c`）
+3. `/insights` でセッション分析レポートを取得
+4. ai/log/sessions/ は compact 頻度・セッション継続時間の補助データとして使用
+5. 各skillの使用頻度と効果を分析（30日で発火 0 のコンポーネントは「直すか畳むか」を判断する）
 6. レポートを生成
 
 ### レポートフォーマット

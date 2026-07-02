@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# cc-harness-metrics: hook 自己ログ(harness-events.jsonl)を集計し、harness の有効性を可視化する。
+#
+# harness-audit skill のデータ源。transcript には hook の deny/block 決定が記録されない
+# (hook stdout は jsonl に残らない)ため、各 hook が hooks/lib/harness-log.{sh,ts} 経由で
+# 残したイベントを読む。「発火しない hook = 行動変化済み or 死に設定」の判定に使う。
+#
+# 使い方: cc-harness-metrics [--days N]   (default: 30)
+set -euo pipefail
+
+days=30
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --days)
+      days="$2"
+      shift 2
+      ;;
+    -h | --help)
+      echo "usage: cc-harness-metrics [--days N]"
+      exit 0
+      ;;
+    *)
+      echo "unknown arg: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+file="${XDG_STATE_HOME:-$HOME/.local/state}/claude/harness-events.jsonl"
+if [ ! -f "$file" ]; then
+  echo "イベントログがまだ無い: $file" >&2
+  echo "(hook が deny/block/warn/reroute した時点から記録が始まる)" >&2
+  exit 1
+fi
+
+# BSD date(macOS) → GNU date の順でフォールバック。ISO 8601 UTC は辞書順比較可能。
+cutoff=$(date -u -v -"${days}"d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null ||
+  date -u -d "-${days} days" +%Y-%m-%dT%H:%M:%SZ)
+
+echo "## Harness events (直近 ${days} 日, since ${cutoff})"
+echo "source: ${file}"
+echo
+
+# 壊れた行(部分書き込み等)は fromjson? で読み飛ばす
+events=$(jq -cR 'fromjson? // empty' "$file")
+
+printf '%s\n' "$events" | jq -rs --arg cutoff "$cutoff" '
+  map(select(.ts >= $cutoff))
+  | if length == 0 then "イベントなし" else
+      group_by(.hook + "/" + .event)
+      | map({hook: .[0].hook, event: .[0].event, count: length})
+      | sort_by(-.count)
+      | (["hook", "event", "count"], (.[] | [.hook, .event, (.count | tostring)]))
+      | @tsv
+    end' | column -t -s "$(printf '\t')"
+
+echo
+
+# stop-hook の block 率: allow(停止許可) を分母に含めることでゲートの介入率が出る
+printf '%s\n' "$events" | jq -rs --arg cutoff "$cutoff" '
+  map(select(.ts >= $cutoff and .hook == "stop-hook"))
+  | (map(select(.event | startswith("block:"))) | length) as $blocks
+  | (map(select(.event | startswith("allow:"))) | length) as $allows
+  | if ($blocks + $allows) == 0 then "stop-hook: イベントなし"
+    else "stop-hook block rate: \($blocks)/\($blocks + $allows) (\(100 * $blocks / ($blocks + $allows) | floor)%)"
+    end'
