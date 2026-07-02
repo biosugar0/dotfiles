@@ -35,7 +35,9 @@
 
 ### データソース
 
-- **主（hook 実績）**: `cc-harness-metrics` — hook 自己ログ `${XDG_STATE_HOME:-~/.local/state}/claude/harness-events.jsonl` の集計。
+- **主（hook 実績）**: `cc-harness-metrics` — hook 自己ログ `$HOME/.local/state/claude/harness-events.jsonl` の集計
+  （XDG_STATE_HOME は意図的に不使用。stop-hook の Deno shebang が `${HOME}` しか展開できず、
+  bash/TS/集計の出力先を確実に一致させるため固定パス）。
   transcript には hook の deny/block 決定が記録されない（hook stdout は jsonl に残らない）ため、hook 自身が
   `hooks/lib/harness-log.{sh,ts}` 経由で残すイベントが唯一の実測データ。
 - **主（skill 実績）**: `~/.config/claude/projects/**/*.jsonl` — `"skill":"<name>"` の出現を rg で集計（Skill tool 呼び出し回数）

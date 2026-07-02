@@ -36,7 +36,10 @@ main=Opus では Opus が吐く＝破損箇所そのもの（reasoning/tool-call
 具体的な行動指示は `hooks/data/golden-rules-opus.txt` にあり、userpromptsubmit-context hook が
 transcript から現行モデルを判定して **Opus 系のときだけ** Golden Rules に注入する
 （モデルは自分が何かを確実には知らないため、常時注入の自己条件付きルールは機能しない）。
-Sonnet/Fable 等のセッションでこの委譲指示に従う必要はない。
+判定不能時（セッション先頭で transcript に assistant message がまだ無い等）は
+既定 main=Opus に合わせて**注入側に倒す**ため、non-Opus セッションの初回ターンにも
+入ることがある。Sonnet/Fable 等と判定済みのセッションでこの委譲指示は注入されず、
+従う必要もない。
 
 背景メモ（モデル非依存の周辺機構）:
 - **事後自動復旧**: `stop-hook` がターン終端で破損を検知し、前置きゼロで先頭から出し直すよう自動リトライ注入。
