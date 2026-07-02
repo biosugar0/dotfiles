@@ -65,6 +65,12 @@ if command -v jq >/dev/null 2>&1 && [ -n "$input" ]; then
 	fi
 fi
 
+# sidebar_width(30) から最長 state 接頭辞 "working · "(10文字) を引いた 20 文字に
+# 丸める。herdr 側の hard-cut と違い、切れたことが分かるよう … を付ける
+if [ -n "$session_name" ] && [ "${#session_name}" -gt 20 ]; then
+	session_name="$(printf '%s' "$session_name" | cut -c1-19)…"
+fi
+
 # --agent claude: pane の検知 agent が claude の間だけ適用される表示ガード。
 # 同一 source の再報告は全項目置き換えのため、name 無し分岐では custom_status が
 # 自然に消える (--clear-custom-status 不要)
