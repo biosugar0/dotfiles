@@ -473,17 +473,23 @@ actual_label=$(herdr pane get "$CODEX_PANE" 2>/dev/null \
 [ -n "$actual_label" ] && [ "$actual_label" = "${CODEX_LABEL:-}" ] \
   || { echo "[guard:pane-missing-or-reused] CODEX_PANE ($CODEX_PANE) が不在か別 pane に再利用済み (label='$actual_label' 期待='$CODEX_LABEL') — H-Step 1 からやり直し" >&2; return 1 2>/dev/null || exit 1; }
 
-# 2. codex がプロンプト待ち状態か。
-# 一次判定は「agent_status が working でない」（manifest ベース。画面構造に依存しない。
-# 実測: プロンプト待ちは blocked と報告されるため == idle 判定は使えない）。
-# 「最終非空行に ❯」判定は codex TUI の最下行がステータスバー
-# （"gpt-5.5 xhigh · <cwd>"）のため構造的に偽陰性になる（実測）。
-# 補助として末尾5行内の glyph 存在も確認する。
+# 2. codex がプロンプト待ち状態か。3条件の AND で判定する:
+#   (a) codex プロセスが pane の前面に生存している（process-info。これが無いと
+#       codex 終了後の shell prompt（starship の ❯）に送ってしまい、プロンプト
+#       文字列が shell コマンドとして実行される事故になる）
+#   (b) agent_status が working でない（manifest ベース。実測: プロンプト待ちは
+#       blocked と報告されることも idle のこともある。done は「完了・未読」で
+#       プロセス生存とは独立なので (a) で担保する）
+#   (c) 末尾5行に入力枠 glyph（補助。「最終非空行」判定は codex TUI の最下行が
+#       ステータスバーのため構造的に偽陰性になる・実測）
+codex_alive=$(herdr pane process-info --pane "$CODEX_PANE" 2>/dev/null \
+  | python3 -c 'import sys,json; ps=json.load(sys.stdin)["result"]["process_info"]["foreground_processes"]; print("yes" if any("codex" in ((p.get("argv0") or "")+(p.get("name") or "")) for p in ps) else "no")' 2>/dev/null)
 codex_status=$(herdr agent get "$CODEX_PANE" 2>/dev/null \
   | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["agent"]["agent_status"])' 2>/dev/null)
 tail_lines=$(herdr pane read "$CODEX_PANE" --source recent-unwrapped --lines 5)
-if [ -z "$codex_status" ] || [ "$codex_status" = "working" ] || ! printf '%s' "$tail_lines" | grep -qE '[❯›]'; then
-  echo "[guard:not-ready] codexがプロンプト待ちではない (status=$codex_status) — abort (H-Step 2 の wait を回してからやり直し)" >&2
+if [ "$codex_alive" != "yes" ] || [ -z "$codex_status" ] || [ "$codex_status" = "working" ] \
+  || ! printf '%s' "$tail_lines" | grep -qE '[❯›]'; then
+  echo "[guard:not-ready] codexがプロンプト待ちではない (alive=$codex_alive status=$codex_status) — abort (H-Step 2 の wait を回してからやり直し。alive=no なら H-Step 1 から)" >&2
   return 1 2>/dev/null || exit 1
 fi
 ```
