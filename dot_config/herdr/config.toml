@@ -38,6 +38,9 @@ split_horizontal = ["prefix+minus", "alt+s"]
 # tmux M-Enter: 新規 window → Herdr では tab
 new_tab = ["prefix+c", "alt+enter"]
 
+# tmux prefix+, (rename-window) 互換。既定の prefix+shift+t も残す
+rename_tab = ["prefix+shift+t", "prefix+comma"]
+
 # tmux M-] / M-[: window 移動 → tab 移動
 next_tab = ["prefix+n", "alt+]"]
 previous_tab = ["prefix+p", "alt+["]
