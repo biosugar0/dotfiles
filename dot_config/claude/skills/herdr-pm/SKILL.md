@@ -23,9 +23,9 @@ herdr-wt feat/task-a --claude   # 出力末尾が worktree パス
 
 # 起動した worker の pane を特定
 herdr agent list   # JSON。cwd が worktree パスの claude を探す
-# サイドバー agents 欄には herdr-pane-title.sh hook が「repo:branch」を
-# display_agent として自動報告する。rename は役割名 (reviewer 等) を
-# 上書きしたい時だけでよい
+# サイドバー agents 欄には herdr-pane-title.sh hook が Claude session name
+# (無ければ repo:branch) を display_agent、repo:branch を custom_status として
+# 自動報告する。rename は役割名 (reviewer 等) を上書きしたい時だけでよい
 herdr agent rename <pane_id> "worker-task-a"
 ```
 

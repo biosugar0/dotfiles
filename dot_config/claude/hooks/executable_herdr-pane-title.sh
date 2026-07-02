@@ -1,12 +1,17 @@
 #!/bin/sh
 # Claude Code hook (SessionStart / UserPromptSubmit):
-# Herdr のサイドバー agents 欄に「repo:branch」を出し、どのリポジトリ・
-# ブランチの worker かを一目で識別できるようにする。あわせて未 pin の
-# workspace label を repo 名で pin し、フォルダ名への自動追従を止める。
+# Herdr のサイドバー agents 欄に session name (無ければ repo:branch) を出し、
+# どのセッション・リポジトリの worker かを一目で識別できるようにする。
+# あわせて未 pin の workspace label を repo 名で pin し、フォルダ名への
+# 自動追従を止める。
 #
 # - agents 行の描画は「1行目=workspace label / 2行目=状態 · display_agent
 #   (無ければ agent rename 名 → 検知 agent 名) · custom_status」(実機確認済)。
 #   pane title は agents 欄には出ないため、--display-agent で報告する。
+# - session name は transcript (jsonl) の custom-title レコード末尾が現在名。
+#   Claude Code が自動生成・自動更新するため初回ターン以降はほぼ常に存在する。
+#   name あり: display_agent=name, custom_status=repo:branch (幅が余れば見える)
+#   name なし: display_agent=repo:branch (従来表示)
 # - herdr 管理の integration (herdr-agent-state.sh) は編集禁止のため、
 #   「add custom hooks beside this file」方針に従った自作 hook。
 # - pane.report_metadata は表示専用。agent の state/通知/rollup には影響しない。
@@ -16,6 +21,9 @@ set -eu
 
 # UserPromptSubmit の stdout は context に注入されるため、一切出力しない
 exec >/dev/null 2>&1
+
+# hook 入力 JSON (session_id / transcript_path を含む) を先に取り込む
+input=$(cat 2>/dev/null) || input=""
 
 [ "${HERDR_ENV:-}" = "1" ] || exit 0
 [ -n "${HERDR_PANE_ID:-}" ] || exit 0
@@ -44,11 +52,32 @@ else
 	repo=$title
 fi
 
+# session name: transcript の custom-title レコードの最後の1件が現在名。
+# UserPromptSubmit はそのターンの自動改名前に発火するため 1 ターン遅れで追従する
+session_name=""
+if command -v jq >/dev/null 2>&1 && [ -n "$input" ]; then
+	transcript=$(printf '%s' "$input" |
+		jq -r '.transcript_path // empty' 2>/dev/null) || transcript=""
+	if [ -n "$transcript" ] && [ -r "$transcript" ]; then
+		session_name=$(grep '"type":"custom-title"' "$transcript" 2>/dev/null |
+			tail -n 1 | jq -r '.customTitle // empty' 2>/dev/null) ||
+			session_name=""
+	fi
+fi
+
 # --agent claude: pane の検知 agent が claude の間だけ適用される表示ガード。
-# display_agent が agents 行 2 行目の「claude」の位置に repo:branch で出る
-herdr pane report-metadata "$HERDR_PANE_ID" \
-	--source user:cc-title --agent claude \
-	--title "$title" --display-agent "$title" || true
+# 同一 source の再報告は全項目置き換えのため、name 無し分岐では custom_status が
+# 自然に消える (--clear-custom-status 不要)
+if [ -n "$session_name" ]; then
+	herdr pane report-metadata "$HERDR_PANE_ID" \
+		--source user:cc-title --agent claude \
+		--title "$title" --display-agent "$session_name" \
+		--custom-status "$title" || true
+else
+	herdr pane report-metadata "$HERDR_PANE_ID" \
+		--source user:cc-title --agent claude \
+		--title "$title" --display-agent "$title" || true
+fi
 
 # workspace label の自動追従 (custom_name 未設定時のみ働く) を止める:
 # 未 pin の workspace は repo 名で pin する。手動 rename (custom_name あり) は
