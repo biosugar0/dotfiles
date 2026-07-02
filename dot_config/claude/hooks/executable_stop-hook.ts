@@ -822,10 +822,14 @@ async function main(): Promise<void> {
     }
 
     // stop_hook_active 時の早期 exit（Goal 駆動中は除く）
+    // 早期 allow も記録する: cc-harness-metrics の block rate 分母が
+    // 「ログされた decision」に偏ると実際より block 率が高く見えるため。
     if (input.stop_hook_active && !goalState) {
+      await hlog("allow:stop_hook_active");
       Deno.exit(0);
     }
     if (!lastMessage) {
+      await hlog("allow:empty_message");
       Deno.exit(0);
     }
 
@@ -838,6 +842,7 @@ async function main(): Promise<void> {
       : false;
 
     if (waitingByText || waitingByTranscript) {
+      await hlog("allow:background_wait");
       if (goalState && gPath) {
         await writeGoalState(gPath, goalState);
       }
@@ -979,6 +984,7 @@ async function main(): Promise<void> {
 
     const auth = await resolveAnthropicAuth();
     if (!auth) {
+      await hlog("allow:no_auth");
       Deno.exit(0);
     }
     const client = new Anthropic({
@@ -1130,6 +1136,7 @@ async function main(): Promise<void> {
 
     const toolBlock = response.content.find((b) => b.type === "tool_use");
     if (!toolBlock || toolBlock.type !== "tool_use") {
+      await hlog("allow:no_decision");
       Deno.exit(0);
     }
 
@@ -1193,6 +1200,8 @@ async function main(): Promise<void> {
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    // hlog は input parse 前に throw した場合スコープ外のため、直接呼ぶ
+    await harnessLog("stop-hook", "allow:error", msg.slice(0, 120));
     await Deno.stderr.write(
       new TextEncoder().encode(`Stop hook error (allowing stop): ${msg}\n`),
     );
