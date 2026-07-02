@@ -76,6 +76,10 @@ log "start: $wt_path (repo=$repo_root)"
 #    git-wt は wt.copy を gitignore syntax の pattern として扱う (.env* 等) ため、
 #    literal パスではなく glob として展開する。ディレクトリ横断のフル gitignore
 #    semantics までは追わない (必要なら herdr-wt = git wt 経由を使う)
+# wt.nocopy は wt.copy より優先される除外パターン (git-wt 仕様)。
+# これを無視すると repo が wt.nocopy = .env.production 等で除外した secret を
+# コピーしてしまうため、候補ごとに glob 照合して除外する。
+nocopy_pats=$(git -C "$repo_root" config --get-all wt.nocopy 2>/dev/null)
 git -C "$repo_root" config --get-all wt.copy 2>/dev/null | while IFS= read -r pat; do
   [ -n "$pat" ] || continue
   (
@@ -83,6 +87,15 @@ git -C "$repo_root" config --get-all wt.copy 2>/dev/null | while IFS= read -r pa
     # 意図的に unquoted: glob 展開させる (.env* → .env.local .env.development ...)
     for src in $pat; do
       [ -e "$src" ] || continue
+      skip=false
+      for np in $nocopy_pats; do
+        # shellcheck disable=SC2254  # 意図的に unquoted: glob として照合
+        case "$src" in $np) skip=true; break ;; esac
+      done
+      if [ "$skip" = true ]; then
+        log "nocopy: $src"
+        continue
+      fi
       dst="$wt_path/$src"
       [ -e "$dst" ] && continue
       mkdir -p "$(dirname "$dst")" && cp -Rp "$src" "$dst" && log "copied: $src"

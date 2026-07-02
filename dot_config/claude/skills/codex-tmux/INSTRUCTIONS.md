@@ -354,8 +354,11 @@ CODEX_PANE=$(herdr pane split "$HERDR_PANE_ID" --direction down --ratio 0.3 --no
 
 # pane にタイトルを設定（トピックに応じた名前をつける）。
 # Herdr の pane id は pane/tab close 後に compact・再利用され得るため、
-# label を state に残して H-Step 4 で同一性を照合する（tmux %N と違い durable でない）
-CODEX_LABEL="codex-<topic>"
+# label を state に残して H-Step 4 で同一性を照合する（tmux %N と違い durable でない）。
+# label には必ず unique suffix を付ける: トピック名だけだと別セッションが同名 label を
+# 使った場合に pane id 再利用+stale state の組で誤送信し得る。suffix 一致 = 自分が
+# 作った pane であることの再利用不能な証明になる。
+CODEX_LABEL="codex-<topic>-$(date +%s)-$$"
 herdr pane rename "$CODEX_PANE" "$CODEX_LABEL"
 
 # repo root を解決して -c で trust_level=trusted を注入
