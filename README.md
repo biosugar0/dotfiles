@@ -55,6 +55,23 @@ The installer handles:
 - **Session Persistence**: resurrect + continuum
 - **Status**: CPU, battery, pane path
 
+## Herdr
+
+Coding-agent-native multiplexer ([herdr.dev](https://herdr.dev/)). tmux と共存させつつ、
+エージェント並列稼働時のメイン環境として移行中。
+
+- **Config**: `dot_config/herdr/config.toml`（chezmoi 管理。runtime state は非管理）
+- **Prefix**: `Ctrl+B`（tmux と同じ）+ tmux 時代の Alt 直バインドを移植
+- **Agent 状態検知**: `herdr integration install claude` の hook（installer 管理、
+  settings.json 側の登録は `settings.json.tmpl` に同一定義あり）
+- **Claude ⇄ Herdr**: `dot_config/claude/skills/herdr/SKILL.md`（公式 skill を vendor。
+  `HERDR_ENV=1` の pane 内でのみ発動）
+- **tmux から置き換わるもの**: claude-count/pane-picker → サイドバー + `alt+p`、
+  resurrect/continuum → server session + `resume_agents_on_restore`、
+  fzf session 切替 → workspace picker
+- **未移行（tmux 継続）**: editprompt（`M-q`）、codex-tmux skill、OSC 777 通知の
+  passthrough（Herdr 側は `[ui.toast] delivery = "terminal"` で代替）
+
 ## AI Tooling
 
 | Tool | Purpose |
@@ -76,6 +93,17 @@ The installer handles:
 | `M-l` / `M-h` | Next / prev window |
 | `M-q` | editprompt |
 | `C-e` (copy-mode) | Collect quote |
+
+### Herdr
+| Key | Action |
+|-----|--------|
+| `M-v` / `M-s` | Split panes |
+| `M-Enter` | New tab |
+| `M-]` / `M-[` | Next / prev tab |
+| `M-a` | Workspace picker |
+| `M-p` / `M-S-p` | Next / prev agent |
+| `prefix+S-f` | Open ghq repo as workspace |
+| `prefix+S-g` | New git worktree workspace |
 
 ### Neovim (editprompt mode)
 | Key | Action |
