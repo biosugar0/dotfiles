@@ -108,6 +108,17 @@ if [ -n "${TMUX_PANE:-}" ]; then
   fi
 fi
 
+# Herdr: goal をサイドバー/pane 境界の custom status として報告 (tmux pane-border の代替)
+if [ "${HERDR_ENV:-}" = "1" ] && [ -n "${HERDR_PANE_ID:-}" ] && command -v herdr >/dev/null 2>&1; then
+  if [ -n "$goal_line" ]; then
+    herdr pane report-metadata "$HERDR_PANE_ID" --source claude-goal \
+      --custom-status "${goal_line:0:80}" >/dev/null 2>&1 || true
+  else
+    herdr pane report-metadata "$HERDR_PANE_ID" --source claude-goal \
+      --clear-custom-status >/dev/null 2>&1 || true
+  fi
+fi
+
 now=$(date '+%Y-%m-%d %H:%M')
 
 # Single additionalContext payload

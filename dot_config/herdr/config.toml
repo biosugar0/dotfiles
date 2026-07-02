@@ -65,6 +65,13 @@ key = "prefix+shift+f"
 type = "pane"
 command = "herdr-ghq-open"
 
+# 並列タスク起動: branch 名を入力 → git wt (wt.copy/wt.hook 適用) →
+# workspace 化 (repo 配下にグルーピング) → root pane で claude 起動、まで一発
+[[keys.command]]
+key = "prefix+t"
+type = "pane"
+command = "herdr-task-new"
+
 [worktrees]
 # Herdr が worktree create で checkout を置く場所。
 # CLI の git-wt (.wt/ 内配置) とは独立した仕組みなので混同しないこと。
@@ -74,6 +81,9 @@ directory = "~/.herdr/worktrees"
 [ui]
 # 「今どのエージェントが自分を必要としているか」を最上位に出す attention queue
 agent_panel_sort = "priority"
+
+# 並列でタブを量産するので名前入力プロンプトは省略 (rename は prefix+shift+t)
+prompt_new_tab_name = false
 
 # pane 名未設定時に検知した agent 名を境界線に表示 (tmux pane-border 表示の代替)
 show_agent_labels_on_pane_borders = true
