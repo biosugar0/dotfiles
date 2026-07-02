@@ -51,6 +51,12 @@ if command -v herdr &>/dev/null; then
 	if command -v codex &>/dev/null; then
 		herdr integration install codex || true
 	fi
+	# worktree-setup plugin (worktree.created イベントで wt.copy/wt.hook を適用)
+	# plugin registry は server 側 state のため、server 未起動だと失敗する
+	if ! herdr plugin link "$HOME/.config/herdr/plugins/worktree-setup" >/dev/null 2>&1; then
+		echo "note: herdr server not running. After starting herdr, run:"
+		echo "  herdr plugin link ~/.config/herdr/plugins/worktree-setup"
+	fi
 fi
 
 

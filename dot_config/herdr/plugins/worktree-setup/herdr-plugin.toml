@@ -1,0 +1,12 @@
+# Herdr が worktree を作った直後に git-wt 相当の初期化 (wt.copy / wt.hook) を行う。
+# インストール: herdr plugin link ~/.config/herdr/plugins/worktree-setup (install.sh が実行)
+id = "biosugar0.worktree-setup"
+name = "Worktree Setup"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+description = "Run git-wt style wt.copy / wt.hook setup after Herdr creates a worktree"
+platforms = ["macos", "linux"]
+
+[[events]]
+on = "worktree.created"
+command = ["bash", "setup.sh"]
