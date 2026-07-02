@@ -21,8 +21,11 @@ description: "Herdr 上で並列 worker (Claude/codex) を PM として監督す
 # worktree 作成 (wt.copy/wt.hook 適用) → workspace 化 → claude 起動まで一発
 herdr-wt feat/task-a --claude   # 出力末尾が worktree パス
 
-# 起動した worker の pane を特定して命名
+# 起動した worker の pane を特定
 herdr agent list   # JSON。cwd が worktree パスの claude を探す
+# サイドバー agents 欄には herdr-pane-title.sh hook が「repo:branch」を
+# display_agent として自動報告する。rename は役割名 (reviewer 等) を
+# 上書きしたい時だけでよい
 herdr agent rename <pane_id> "worker-task-a"
 ```
 

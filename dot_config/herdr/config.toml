@@ -85,6 +85,10 @@ directory = "~/.herdr/worktrees"
 # 「今どのエージェントが自分を必要としているか」を最上位に出す attention queue
 agent_panel_sort = "priority"
 
+# agents 欄 2 行目には claude hook (herdr-pane-title.sh) が display_agent と
+# して報告する「repo:branch」が出る。既定幅 26 だと切れやすいため広げる (上限 36)
+sidebar_width = 30
+
 # 並列でタブを量産するので名前入力プロンプトは省略 (rename は prefix+shift+t)
 prompt_new_tab_name = false
 

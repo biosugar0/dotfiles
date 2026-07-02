@@ -195,6 +195,11 @@
             "type": "command",
             "command": "bash '{{ .chezmoi.homeDir }}/.config/claude/hooks/herdr-agent-state.sh' session",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/herdr-pane-title.sh",
+            "timeout": 5
           }
         ]
       }
@@ -367,6 +372,11 @@
           {
             "type": "command",
             "command": "$HOME/.config/claude/hooks/userpromptsubmit-context.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/herdr-pane-title.sh",
             "timeout": 5
           }
         ]

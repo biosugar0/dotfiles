@@ -49,14 +49,25 @@ fi
 
 # Herdr workspace 化 (worktree open は親 repo 配下にグルーピングされる)。
 # server 不在なら worktree だけ作って終わる。
+# 注意: worktree open に --label を渡すと already_open (再オープン) 時も
+# label を強制上書きし、手動 rename が消える (実測)。label 無しで開き、
+# 新規オープン時だけ rename で branch 名を pin する。
 open_json=$(herdr worktree open --cwd "$repo_root" --path "$wt_path" \
-	--label "$branch" --focus --json 2>/dev/null) ||
+	--focus --json 2>/dev/null) ||
 	open_json=$(herdr workspace create --cwd "$wt_path" --label "$branch" --focus 2>/dev/null) ||
 	{
 		echo "$wt_path"
 		echo "herdr-wt: worktree ready (herdr server not running; workspace not opened)" >&2
 		exit 0
 	}
+
+ws_id=$(printf '%s' "$open_json" | python3 -c '
+import sys, json
+r = json.load(sys.stdin)["result"]
+w = r.get("workspace") or {}
+print("" if r.get("already_open") else w.get("workspace_id", ""))
+' 2>/dev/null || true)
+[ -n "$ws_id" ] && herdr workspace rename "$ws_id" "$branch" >/dev/null 2>&1 || true
 
 if [ "$start_claude" = true ]; then
 	# already_open の workspace には起動済みの可能性があるため送らない
