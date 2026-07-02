@@ -35,7 +35,10 @@ if [ -n "$session_id" ]; then
   cache_file="/tmp/claude-session-summaries/${session_id}.json"
   if [ -f "$cache_file" ]; then
     cached_slug=$(jq -r '.slug // empty' "$cache_file" 2>/dev/null || true)
-    [ -n "$cached_slug" ] && title="$cached_slug"
+    # 旧形式キャッシュや生成不良 ("-" 単体等) を弾く: kebab-case 2-5語のみ採用
+    if printf '%s' "$cached_slug" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+){1,4}$'; then
+      title="$cached_slug"
+    fi
   fi
 fi
 

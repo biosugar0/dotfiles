@@ -303,26 +303,25 @@ async function summarizeWithHaiku(
         messages: [
           {
             role: "user",
-            content: `セッション情報から2行で出力せよ。
+            content: `セッション情報から JSON オブジェクトを1つだけ出力せよ。前置き・説明・コードフェンスは一切禁止。
 
-1行目: 40文字以内の日本語要約 (<テーマ>:<直近論点>)
-2行目: 2-3語の英語kebab-case slug (例: statusline-session-title, oauth-token-fix)
+形式: {"summary":"<40文字以内の日本語要約 (<テーマ>:<直近論点>)>","slug":"<2-3語の英語kebab-case>"}
 
-要約ルール:
+summaryルール:
 - テーマ = セッション全体の主題(短い名詞句)
 - 直近論点 = 最近の指示から判断する直近の具体論点
 - 進捗や次の行動は推測しない
 - 抽象語を避け、機能名や設定名を優先
 - 接頭辞・装飾不要
-- 情報不足なら「-」とだけ出力
+- 情報不足なら "-" とする
 
 slugルール:
 - 英語のkebab-case、2-3語
 - セッションの主題を端的に表す
 - 例: hook-session-title, changelog-review, statusline-summary
 
-良い要約例: "statusline改善:要約形式の見直し", "OAuth対応:キャッシュTTLの扱い"
-悪い要約例: "statusline改善:調整中", "dotfiles改善:いろいろ修正"
+良い summary 例: "statusline改善:要約形式の見直し", "OAuth対応:キャッシュTTLの扱い"
+悪い summary 例: "statusline改善:調整中", "dotfiles改善:いろいろ修正"
 
 最初の指示:
 ${firstMessage}${recentPart}`,
@@ -333,14 +332,26 @@ ${firstMessage}${recentPart}`,
     });
     const data = await resp.json();
     const text = data?.content?.[0]?.text?.trim() ?? "";
-    const lines = text.split("\n").map((l: string) => l.trim()).filter(Boolean);
-    // Parse summary (line 1)
-    const summaryLine = lines[0] ?? "";
-    if (!summaryLine || summaryLine === "-" || summaryLine.includes("理由") || summaryLine.includes("判断できません") || summaryLine.length > 60 || (!summaryLine.includes(":") && !summaryLine.includes("："))) return empty;
-    const summary = summaryLine.replace(/：/g, ":").slice(0, 50);
-    // Parse slug (line 2)
-    const rawSlug = (lines[1] ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 30);
-    const slug = rawSlug || "";
+    // 前置き・コードフェンスが混入しても JSON 部分だけ抜き出してパースする
+    // (行位置ベースの旧パースは前置き行が summary として通過するバグがあった)
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start < 0 || end <= start) return empty;
+    let parsed: { summary?: unknown; slug?: unknown };
+    try {
+      parsed = JSON.parse(text.slice(start, end + 1));
+    } catch {
+      return empty;
+    }
+    const rawSummary = typeof parsed.summary === "string"
+      ? parsed.summary.trim().replace(/：/g, ":")
+      : "";
+    if (!rawSummary || rawSummary === "-" || rawSummary.length > 60 || !rawSummary.includes(":")) {
+      return empty;
+    }
+    const summary = rawSummary.slice(0, 50);
+    const rawSlug = typeof parsed.slug === "string" ? parsed.slug.trim().toLowerCase() : "";
+    const slug = /^[a-z0-9]+(-[a-z0-9]+){1,4}$/.test(rawSlug) ? rawSlug : "";
     return { summary, slug };
   } catch {
     return empty;
