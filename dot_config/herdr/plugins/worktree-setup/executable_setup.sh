@@ -72,13 +72,22 @@ fi
 
 log "start: $wt_path (repo=$repo_root)"
 
-# 3. wt.copy: 明示指定ファイルを main checkout からコピー (既存は上書きしない)
-git -C "$repo_root" config --get-all wt.copy 2>/dev/null | while IFS= read -r rel; do
-  [ -n "$rel" ] || continue
-  src="$repo_root/$rel"
-  dst="$wt_path/$rel"
-  [ -e "$src" ] && [ ! -e "$dst" ] || continue
-  mkdir -p "$(dirname "$dst")" && cp -Rp "$src" "$dst" && log "copied: $rel"
+# 3. wt.copy: main checkout からコピー (既存は上書きしない)。
+#    git-wt は wt.copy を gitignore syntax の pattern として扱う (.env* 等) ため、
+#    literal パスではなく glob として展開する。ディレクトリ横断のフル gitignore
+#    semantics までは追わない (必要なら herdr-wt = git wt 経由を使う)
+git -C "$repo_root" config --get-all wt.copy 2>/dev/null | while IFS= read -r pat; do
+  [ -n "$pat" ] || continue
+  (
+    cd "$repo_root" || exit 0
+    # 意図的に unquoted: glob 展開させる (.env* → .env.local .env.development ...)
+    for src in $pat; do
+      [ -e "$src" ] || continue
+      dst="$wt_path/$src"
+      [ -e "$dst" ] && continue
+      mkdir -p "$(dirname "$dst")" && cp -Rp "$src" "$dst" && log "copied: $src"
+    done
+  )
 done
 
 # wt.copyignored の全 ignored コピーは非対応 (node_modules 等を巻き込むため)。

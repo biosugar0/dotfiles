@@ -352,8 +352,11 @@ CODEX_PANE=$(herdr pane split "$HERDR_PANE_ID" --direction down --ratio 0.3 --no
   && [ -n "$CODEX_PANE" ] \
   || { echo "[guard:split-failed] herdr pane split が失敗 — abort" >&2; return 1 2>/dev/null || exit 1; }
 
-# pane にタイトルを設定（トピックに応じた名前をつける）
-herdr pane rename "$CODEX_PANE" "codex-<topic>"
+# pane にタイトルを設定（トピックに応じた名前をつける）。
+# Herdr の pane id は pane/tab close 後に compact・再利用され得るため、
+# label を state に残して H-Step 4 で同一性を照合する（tmux %N と違い durable でない）
+CODEX_LABEL="codex-<topic>"
+herdr pane rename "$CODEX_PANE" "$CODEX_LABEL"
 
 # repo root を解決して -c で trust_level=trusted を注入
 # （導出ロジック・注意点・既知制約は tmux 版 Step 1 と同一）
@@ -375,6 +378,7 @@ fi
 {
   printf "CODEX_BACKEND='herdr'\n"
   printf "CODEX_PANE='%s'\n" "$CODEX_PANE"
+  printf "CODEX_LABEL='%s'\n" "$CODEX_LABEL"
   printf "PARENT_PANE='%s'\n" "$HERDR_PANE_ID"
 } > "$STATE_FILE"
 ```
@@ -408,7 +412,7 @@ herdr pane read "$CODEX_PANE" --source recent-unwrapped --lines 100
 
 ```bash
 # 0. state を復元（unset → source の理由は tmux 版 Step 4 参照）
-unset CODEX_BACKEND CODEX_PANE PARENT_PANE
+unset CODEX_BACKEND CODEX_PANE CODEX_LABEL PARENT_PANE
 PANE_KEY=$(printf '%s' "$HERDR_PANE_ID" | tr -c 'A-Za-z0-9' '_')
 STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/codex-tmux/state-${PANE_KEY}.env"
 [ -r "$STATE_FILE" ] \
@@ -417,9 +421,13 @@ source "$STATE_FILE"
 [ "$CODEX_BACKEND" = "herdr" ] && [ -n "$CODEX_PANE" ] \
   || { echo "[guard:state-invalid] state file の中身が不完全 — H-Step 1 からやり直し" >&2; return 1 2>/dev/null || exit 1; }
 
-# 1. pane が存在するか
-herdr pane get "$CODEX_PANE" >/dev/null 2>&1 \
-  || { echo "[guard:pane-missing] CODEX_PANE ($CODEX_PANE) が存在しない — H-Step 1 からやり直し" >&2; return 1 2>/dev/null || exit 1; }
+# 1. pane が存在し、かつ「同じ codex pane」か。
+# Herdr の pane id は close 後に compact・再利用され得るため、存在確認だけでは
+# 別 pane を掴む可能性がある。label の一致まで照合して同一性を確認する。
+actual_label=$(herdr pane get "$CODEX_PANE" 2>/dev/null \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["pane"].get("label") or "")' 2>/dev/null)
+[ -n "$actual_label" ] && [ "$actual_label" = "${CODEX_LABEL:-}" ] \
+  || { echo "[guard:pane-missing-or-reused] CODEX_PANE ($CODEX_PANE) が不在か別 pane に再利用済み (label='$actual_label' 期待='$CODEX_LABEL') — H-Step 1 からやり直し" >&2; return 1 2>/dev/null || exit 1; }
 
 # 2. codex がプロンプト待ち状態か（glyph は版により ❯ または › のいずれか）
 # pane 末尾は空行になり得る（実測）ため、最後の「非空行」を判定対象にする
