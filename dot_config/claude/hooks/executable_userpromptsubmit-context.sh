@@ -2,6 +2,8 @@
 # UserPromptSubmit hook:
 #   - additionalContext に golden-rules + workflow-instructions + git status + goal status + 現在時刻を集約注入
 #   - sessionTitle を Haiku 要約キャッシュ（なければ dir/branch）から設定
+#   - ただし手動 /rename を尊重: transcript 上の現在名が「この hook が前回設定した名前」
+#     (state file) と異なる場合は手動 rename とみなし、以後 sessionTitle を注入しない
 set -euo pipefail
 
 # Read stdin JSON
@@ -34,6 +36,24 @@ if [ -n "$session_id" ]; then
   if [ -f "$cache_file" ]; then
     cached_slug=$(jq -r '.slug // empty' "$cache_file" 2>/dev/null || true)
     [ -n "$cached_slug" ] && title="$cached_slug"
+  fi
+fi
+
+# 手動 /rename の検出: 現在名 (transcript の custom-title 末尾) が state file
+# (この hook が最後に設定した名前) と異なる = ユーザーが /rename した。
+# state file が無い初回は判定不能なので従来通り設定する (直後の /rename から尊重される)
+title_state_dir="/tmp/claude-session-titles"
+title_state_file=""
+skip_title=0
+if [ -n "$session_id" ]; then
+  title_state_file="${title_state_dir}/${session_id}"
+  if [ -f "$title_state_file" ] && [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
+    last_set=$(cat "$title_state_file" 2>/dev/null || true)
+    current_name=$(grep '"type":"custom-title"' "$transcript_path" 2>/dev/null \
+      | tail -n 1 | jq -r '.customTitle // empty' 2>/dev/null || true)
+    if [ -n "$last_set" ] && [ -n "$current_name" ] && [ "$current_name" != "$last_set" ]; then
+      skip_title=1
+    fi
   fi
 fi
 
@@ -127,5 +147,14 @@ goal_block=""
 context=$(printf '%s\n\n%s\n\n## Git status (--short)\n%s%s\n\n---\nCurrent time: %s\n' \
   "$golden" "$workflow" "$git_status" "$goal_block" "$now")
 
-printf '%s' "$context" | jq -Rs --arg t "$title" \
-  '{hookSpecificOutput:{hookEventName:"UserPromptSubmit",additionalContext:.,sessionTitle:$t}}'
+if [ "$skip_title" = "1" ]; then
+  printf '%s' "$context" | jq -Rs \
+    '{hookSpecificOutput:{hookEventName:"UserPromptSubmit",additionalContext:.}}'
+else
+  if [ -n "$title_state_file" ]; then
+    mkdir -p "$title_state_dir" 2>/dev/null || true
+    printf '%s' "$title" > "$title_state_file" 2>/dev/null || true
+  fi
+  printf '%s' "$context" | jq -Rs --arg t "$title" \
+    '{hookSpecificOutput:{hookEventName:"UserPromptSubmit",additionalContext:.,sessionTitle:$t}}'
+fi
