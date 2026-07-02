@@ -14,6 +14,20 @@
 - タスクは細かく分割し、subagentで実行
 - 論理的かつ批判的な姿勢で議論
 
+## コーディング規律
+
+規律の本体は `hooks/data/coding-rules.txt` にあり、userpromptsubmit-context hook が
+**working tree にソースコード変更がある間だけ毎プロンプト注入**する
+（PR 説明系のルールは `hooks/data/workflow-instructions.md` の「PRの作成」節）。
+CLAUDE.md は user message としてセッション開始時に一度入るだけで長セッションでは
+減衰するため、実装中・PR 作成時に効かせたいルールはここに置かない。
+
+セッション開始時に効かせるものだけをここに残す:
+
+- **repo 規約の能動確認**: 対象 repo に CLAUDE.md が無い場合ほど、周辺コードの規約
+  （定数・型・命名・エラーハンドリング・ログ出力（console 直書きせず repo の logger）・
+  commit 前チェックコマンド）を実装前に確認して合わせる。
+
 ## トラブルシューティング
 
 CI/ビルド失敗時は、ワークアラウンド（空コミット、手動リラン等）を試す前に**必ず根本原因を特定**する。

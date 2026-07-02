@@ -109,6 +109,17 @@ git_status=""
 if git -C "${CLAUDE_PROJECT_DIR:-.}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git_status=$(git -C "${CLAUDE_PROJECT_DIR:-.}" status --short 2>/dev/null || true)
 fi
+
+# コーディング規律の条件注入:
+# CLAUDE.md 置きだと user message としてセッション開始時に一度入るだけで長セッションで減衰する。
+# working tree にソースコード変更がある（=実装局面）間だけ毎プロンプト再注入し、
+# 調査・設計セッションではトークンを使わない。
+coding_rules=""
+if [ -n "$git_status" ] && printf '%s\n' "$git_status" \
+  | grep -Eq '\.(ts|tsx|js|jsx|mjs|cjs|vue|svelte|py|go|rs|rb|java|kt|swift|c|h|cc|cpp|hpp|sql|prisma|proto|sh|bash|zsh|tf)$'; then
+  coding_rules=$(cat ~/.config/claude/hooks/data/coding-rules.txt 2>/dev/null || true)
+fi
+
 [ -z "$git_status" ] && git_status="（clean）"
 
 # Goal status
@@ -170,8 +181,10 @@ now=$(date '+%Y-%m-%d %H:%M')
 # Single additionalContext payload
 goal_block=""
 [ -n "$goal_line" ] && goal_block=$(printf '\n## %s\n' "$goal_line")
-context=$(printf '%s\n\n%s\n\n## Git status (--short)\n%s%s%s\n\n---\nCurrent time: %s\n' \
-  "$golden" "$workflow" "$git_status" "$goal_block" "$leak_block" "$now")
+coding_block=""
+[ -n "$coding_rules" ] && coding_block=$(printf '\n\n%s' "$coding_rules")
+context=$(printf '%s\n\n%s%s\n\n## Git status (--short)\n%s%s%s\n\n---\nCurrent time: %s\n' \
+  "$golden" "$workflow" "$coding_block" "$git_status" "$goal_block" "$leak_block" "$now")
 
 if [ "$skip_title" = "1" ]; then
   printf '%s' "$context" | jq -Rs \
