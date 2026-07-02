@@ -4,8 +4,8 @@
 
 ## いつ蒸留するか
 
-- **evaluator が APPROVED した後のみ**。蒸留前に `ai/state/workflow-gate.json` を読み、`evaluator.status == "APPROVED"` かつ
-  `head_sha` が現在の HEAD と一致することを確認する。APPROVED でなければ蒸留しない（未検証の教訓は害）。
+- **evaluator が PASS した後のみ**。蒸留前に `ai/state/workflow-gate.json` を読み、`evaluator.status == "PASS"` かつ
+  `head_sha` が現在の HEAD と一致することを確認する。PASS でなければ蒸留しない（未検証の教訓は害）。
   ユーザーが明示的に「これを記録して」と指示した場合のみ例外。
 - 残す価値があるのは「次に同じ判断をするとき時間を節約する」もの: ハマった罠とその回避、確定したアプローチ（なぜそれが正しいか）。
 
