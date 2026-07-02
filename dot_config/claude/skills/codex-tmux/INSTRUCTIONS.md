@@ -304,7 +304,7 @@ tmux 操作と Herdr CLI の対応:
 | `tmux capture-pane` の5秒ポーリングによる完了検知 | `herdr wait output <pane_id> --match '<完了マーカーの正規表現>' --regex --timeout <ms>`（blocking。ポーリングループ自体を廃止） |
 | `tmux capture-pane -t <pane> -p -S -100`（内容取得） | `herdr pane read <pane_id> --source recent-unwrapped --lines 100` |
 | `tmux kill-pane -t <pane>` | `herdr pane close <pane_id>` |
-| state ファイルのキー（tmux pane id） | Herdr pane id（`$HERDR_PANE_ID`）で同じ命名規則（`state-<PANE_KEY>.env`） |
+| state ファイルのキー（tmux pane id） | 親 pane の `terminal_id`（`herdr pane get` で取得。public pane id は compact/再利用されるため使わない）で同じ命名規則（`state-<PANE_KEY>.env`） |
 
 ### H-Step 0: 位置確認（必須・split 前の境界チェック）
 
@@ -312,13 +312,18 @@ tmux 操作と Herdr CLI の対応:
 # pre-flight: 必須環境変数と pane id の生存確認
 [ "${HERDR_ENV:-}" = "1" ] && [ -n "$HERDR_PANE_ID" ] \
   || { echo "[guard:not-in-herdr] not in herdr (HERDR_ENV/HERDR_PANE_ID empty)" >&2; return 1 2>/dev/null || exit 1; }
-herdr pane get "$HERDR_PANE_ID" >/dev/null 2>&1 \
-  || { echo "[guard:stale-herdr-pane] HERDR_PANE_ID=$HERDR_PANE_ID is stale" >&2; return 1 2>/dev/null || exit 1; }
 
-# state file 置き場。キーは tmux pane id の代わりに Herdr pane id を使う。
-# 分離の理由・命名の流儀は tmux 版 Step 0 と同一（呼び出し元 pane ごとに分離）。
+# state file 置き場。キーは Herdr の public pane id ($HERDR_PANE_ID) では**なく**、
+# pane の terminal_id から導出する。public pane id (w1:p2 形式) は pane/tab close 後に
+# compact・再利用されるため、これを key にすると「旧親 pane と同じ id を得た別 pane」が
+# 旧 state を読んで残存 codex pane に誤送信し得る。terminal_id は pane 実体ごとに
+# 一意で再利用されないため、id 再利用時は state-missing → H-Step 1 からやり直しに倒れる。
+PARENT_TERMINAL=$(herdr pane get "$HERDR_PANE_ID" 2>/dev/null \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["pane"]["terminal_id"])' 2>/dev/null)
+[ -n "$PARENT_TERMINAL" ] \
+  || { echo "[guard:stale-herdr-pane] HERDR_PANE_ID=$HERDR_PANE_ID is stale (terminal_id 取得失敗)" >&2; return 1 2>/dev/null || exit 1; }
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/codex-tmux"
-PANE_KEY=$(printf '%s' "$HERDR_PANE_ID" | tr -c 'A-Za-z0-9' '_')
+PANE_KEY=$(printf '%s' "$PARENT_TERMINAL" | tr -c 'A-Za-z0-9' '_')
 STATE_FILE="$STATE_DIR/state-${PANE_KEY}.env"
 mkdir -p "$STATE_DIR"
 
@@ -383,6 +388,7 @@ fi
   printf "CODEX_PANE='%s'\n" "$CODEX_PANE"
   printf "CODEX_LABEL='%s'\n" "$CODEX_LABEL"
   printf "PARENT_PANE='%s'\n" "$HERDR_PANE_ID"
+  printf "PARENT_TERMINAL='%s'\n" "$PARENT_TERMINAL"
 } > "$STATE_FILE"
 ```
 
@@ -414,15 +420,22 @@ herdr pane read "$CODEX_PANE" --source recent-unwrapped --lines 100
 #### 送信前ガード（必須）
 
 ```bash
-# 0. state を復元（unset → source の理由は tmux 版 Step 4 参照）
-unset CODEX_BACKEND CODEX_PANE CODEX_LABEL PARENT_PANE
-PANE_KEY=$(printf '%s' "$HERDR_PANE_ID" | tr -c 'A-Za-z0-9' '_')
+# 0. state を復元（unset → source の理由は tmux 版 Step 4 参照）。
+# key は H-Step 0 と同じく「今の親 pane の terminal_id」から**再導出**する。
+# terminal_id は pane 実体ごとに一意・再利用不能なので、public pane id が
+# 再利用された別 pane からは旧 state に到達できない（state-missing に倒れる）。
+unset CODEX_BACKEND CODEX_PANE CODEX_LABEL PARENT_PANE PARENT_TERMINAL
+CUR_TERMINAL=$(herdr pane get "$HERDR_PANE_ID" 2>/dev/null \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["pane"]["terminal_id"])' 2>/dev/null)
+[ -n "$CUR_TERMINAL" ] \
+  || { echo "[guard:stale-herdr-pane] 親 pane の terminal_id が取得できない" >&2; return 1 2>/dev/null || exit 1; }
+PANE_KEY=$(printf '%s' "$CUR_TERMINAL" | tr -c 'A-Za-z0-9' '_')
 STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/codex-tmux/state-${PANE_KEY}.env"
 [ -r "$STATE_FILE" ] \
   || { echo "[guard:state-missing] state file ($STATE_FILE) 不在 — H-Step 1 からやり直し" >&2; return 1 2>/dev/null || exit 1; }
 source "$STATE_FILE"
-[ "$CODEX_BACKEND" = "herdr" ] && [ -n "$CODEX_PANE" ] \
-  || { echo "[guard:state-invalid] state file の中身が不完全 — H-Step 1 からやり直し" >&2; return 1 2>/dev/null || exit 1; }
+[ "$CODEX_BACKEND" = "herdr" ] && [ -n "$CODEX_PANE" ] && [ "$PARENT_TERMINAL" = "$CUR_TERMINAL" ] \
+  || { echo "[guard:state-invalid] state file の中身が不完全 or 親 pane 所有権不一致 — H-Step 1 からやり直し" >&2; return 1 2>/dev/null || exit 1; }
 
 # 1. pane が存在し、かつ「同じ codex pane」か。
 # Herdr の pane id は close 後に compact・再利用され得るため、存在確認だけでは
@@ -470,7 +483,10 @@ herdr pane send-keys "$CODEX_PANE" Enter
 ### H-Step 6: 終了
 
 ```bash
-PANE_KEY=$(printf '%s' "$HERDR_PANE_ID" | tr -c 'A-Za-z0-9' '_')
+# key は H-Step 0/4 と同じく terminal_id から再導出する
+CUR_TERMINAL=$(herdr pane get "$HERDR_PANE_ID" 2>/dev/null \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["pane"]["terminal_id"])' 2>/dev/null)
+PANE_KEY=$(printf '%s' "${CUR_TERMINAL:-$HERDR_PANE_ID}" | tr -c 'A-Za-z0-9' '_')
 herdr pane close "$CODEX_PANE"
 rm -f /tmp/codex-prompt.txt "${XDG_STATE_HOME:-$HOME/.local/state}/codex-tmux/state-${PANE_KEY}.env"
 ```
