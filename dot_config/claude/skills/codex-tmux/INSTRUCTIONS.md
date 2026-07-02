@@ -375,6 +375,14 @@ else
   _codex_root=""
 fi
 
+# shell 初期化完了を待つ（実測: split 直後の pane run は zsh/zplug 初期化中に
+# 入力が食われて何も実行されないことがある）。
+# timeout は成功扱いにしない: fresh 環境では zplug が対話プロンプト (Install? [y/N])
+# で停止していることがあり、そのまま送ると codex 起動文字列が read 側に流れて壊れる。
+herdr wait output "$CODEX_PANE" --match '[❯$%>]' --regex --timeout 20000 >/dev/null 2>&1 \
+  || { echo "[guard:shell-not-ready] shell がプロンプトに到達しない — pane read で状態を確認して対処 (zplug 対話プロンプト等)" >&2; \
+       herdr pane read "$CODEX_PANE" --source recent-unwrapped --lines 10 >&2; return 1 2>/dev/null || exit 1; }
+
 # codex 起動。`herdr pane run` はテキスト+Enter を1リクエストで送る
 if [ -n "$_codex_root" ]; then
   herdr pane run "$CODEX_PANE" "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox -c 'projects={\"$_codex_root\"={trust_level=\"trusted\"}}' \"\$(cat /tmp/codex-prompt.txt)\""
@@ -394,18 +402,38 @@ fi
 
 ### H-Step 2: 完了検知
 
-`herdr wait output` でプロンプト復帰（`❯` または `›`）を blocking で待つ。
-tmux 版の5秒ポーリングループは不要。
+**一次手段は agent 状態**（Herdr の manifest ベース検知）。画面文字列マッチと違い、
+プロンプト行やコマンドエコーによる偽マッチがない。
+完了の定義は「`working` から抜けた」こと。**実測: 入力プロンプト待ちの codex は
+`idle` ではなく `blocked` と報告される**（入力待ち=要対応の分類）ため、
+`wait agent-status --status idle` は完了しても返らないことがある。
+到達状態が idle/blocked/done のどれかになるかは確定しないので、状態をポーリングする
+（tmux 版の capture-pane 差分ポーリングと違い、判定は semantic なので誤検知しない）。
 
 ```bash
-# timeout は ms。長い調査を依頼した場合は延ばす
-herdr wait output "$CODEX_PANE" --match '[❯›]' --regex --timeout 600000 \
-  || { echo "[guard:wait-timeout] codex 応答待ちがタイムアウト" >&2; return 1 2>/dev/null || exit 1; }
+# working から抜けるまで待つ (5秒間隔、既定 10 分で timeout)
+_waited=0
+while :; do
+  _st=$(herdr agent get "$CODEX_PANE" 2>/dev/null \
+    | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["agent"]["agent_status"])' 2>/dev/null)
+  [ -n "$_st" ] && [ "$_st" != "working" ] && { echo "[codex-tmux] status=$_st (完了)"; break; }
+  _waited=$((_waited+5))
+  [ "$_waited" -ge 600 ] && { echo "[guard:wait-timeout] codex 応答待ちがタイムアウト" >&2; return 1 2>/dev/null || exit 1; }
+  sleep 5
+done
 ```
 
-注: codex 起動直後や作業中も入力枠のグリフが画面に残っていて早期マッチすることがある。
-その場合でも H-Step 4 の送信前ガード（最終行判定）で弾かれるので、少し待ってから
-wait を再実行して待ち直すこと。
+フォールバック（agent 検知が unknown のままの場合のみ）:
+`herdr wait output "$CODEX_PANE" --match '[❯›]' --regex --timeout 600000`。
+ただしこの文字列マッチは**プロンプト行（タイプしたコマンドと ❯ が同居する行）や
+起動直後の入力枠グリフにも即マッチし得る**。早期マッチしても H-Step 4 の送信前
+ガード（最終非空行判定）で弾かれるので、少し待って wait を再実行すること。
+
+注（マーカー偽マッチの罠・実測）: `wait output` は pane に表示された**コマンドの
+エコー行**にもマッチする。任意のマーカー文字列（例: `echo MARKER_OK` の完了検知）を
+待つ場合、タイプした瞬間にコマンド行自身へマッチして「実行完了前」に抜けてしまう。
+マーカー待ちをする時は `echo DONE_MARK''ER_OK` のように「タイプ文字列と出力が
+異なる」形で送ること。
 
 ### H-Step 3: 結果読み取り
 
@@ -445,12 +473,23 @@ actual_label=$(herdr pane get "$CODEX_PANE" 2>/dev/null \
 [ -n "$actual_label" ] && [ "$actual_label" = "${CODEX_LABEL:-}" ] \
   || { echo "[guard:pane-missing-or-reused] CODEX_PANE ($CODEX_PANE) が不在か別 pane に再利用済み (label='$actual_label' 期待='$CODEX_LABEL') — H-Step 1 からやり直し" >&2; return 1 2>/dev/null || exit 1; }
 
-# 2. codex がプロンプト待ち状態か（glyph は版により ❯ または › のいずれか）
-# pane 末尾は空行になり得る（実測）ため、最後の「非空行」を判定対象にする
-last_line=$(herdr pane read "$CODEX_PANE" --source recent-unwrapped --lines 5 \
-  | grep -v '^[[:space:]]*$' | tail -1)
-if ! echo "$last_line" | grep -qE '[❯›]'; then
-  echo "[guard:not-ready] codexがプロンプト待ちではない — abort (H-Step 2 の wait を回してからやり直し)" >&2
+# 2. codex がプロンプト待ち状態か。3条件の AND で判定する:
+#   (a) codex プロセスが pane の前面に生存している（process-info。これが無いと
+#       codex 終了後の shell prompt（starship の ❯）に送ってしまい、プロンプト
+#       文字列が shell コマンドとして実行される事故になる）
+#   (b) agent_status が working でない（manifest ベース。実測: プロンプト待ちは
+#       blocked と報告されることも idle のこともある。done は「完了・未読」で
+#       プロセス生存とは独立なので (a) で担保する）
+#   (c) 末尾5行に入力枠 glyph（補助。「最終非空行」判定は codex TUI の最下行が
+#       ステータスバーのため構造的に偽陰性になる・実測）
+codex_alive=$(herdr pane process-info --pane "$CODEX_PANE" 2>/dev/null \
+  | python3 -c 'import sys,json; ps=json.load(sys.stdin)["result"]["process_info"]["foreground_processes"]; print("yes" if any("codex" in ((p.get("argv0") or "")+(p.get("name") or "")) for p in ps) else "no")' 2>/dev/null)
+codex_status=$(herdr agent get "$CODEX_PANE" 2>/dev/null \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["agent"]["agent_status"])' 2>/dev/null)
+tail_lines=$(herdr pane read "$CODEX_PANE" --source recent-unwrapped --lines 5)
+if [ "$codex_alive" != "yes" ] || [ -z "$codex_status" ] || [ "$codex_status" = "working" ] \
+  || ! printf '%s' "$tail_lines" | grep -qE '[❯›]'; then
+  echo "[guard:not-ready] codexがプロンプト待ちではない (alive=$codex_alive status=$codex_status) — abort (H-Step 2 の wait を回してからやり直し。alive=no なら H-Step 1 から)" >&2
   return 1 2>/dev/null || exit 1
 fi
 ```
