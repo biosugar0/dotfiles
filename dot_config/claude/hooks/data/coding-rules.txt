@@ -1,4 +1,5 @@
 # コーディング規律（working tree にコード変更がある間のみ注入）
+- 既定 immutable: 引数・共有状態を in-place で書き換えず新しい値を返す（共有 mutation はエイリアシング・並行実行越しの遠隔バグ源）。宣言は再代入不可を既定に（const/readonly/`Readonly<T>`/frozen dataclass/final 等）。破壊的メソッド（sort/splice/reverse）はコピーしてから（`[...arr].sort()`。toSorted 等は実行環境の対応を確認してから）。mutation が必要な場合は関数ローカルに閉じる。ただしループ内での毎回 spread コピー（O(n²)）のような機械的適用はせず、その場合はローカル可変で構築して返す
 - パターンの不変条件を先に列挙: outbox・CAS・lease 等の既知パターンは、成立条件（例: outbox insert は状態遷移と同一トランザクション）を実装前に列挙する。複数レコード/テーブルにまたがる整合が必要な書き込みは同一トランザクション。境界の外に出す場合は理由をコメントで宣言
 - 値集合・型の単一情報源: 同じ値集合・文字列 union を2箇所以上にリテラルで書かない。既存の定数・enum・型を grep して再利用。意図的リテラル化には単一情報源へのコメント参照。プロセス/サービス境界を跨ぐ message/payload 型は両側で共有し、union の分岐は never で網羅性チェック
 - 命名は用途が分かる具体名: DB テーブル・カラム・public API・イベント名は名前だけで用途が分かるように（xxx_outbox でなく xxx_terminal_event_outbox）。状態フラグは検知条件でなく意味で命名（実態が「リトライ不能」なら initFailed でなく nonRetriableFailure）
