@@ -375,6 +375,10 @@ else
   _codex_root=""
 fi
 
+# shell 初期化完了を待つ（実測: split 直後の pane run は zsh/zplug 初期化中に
+# 入力が食われて何も実行されないことがある。プロンプト出現を待つか最低 2 秒置く）
+herdr wait output "$CODEX_PANE" --match '[❯$%>]' --regex --timeout 20000 >/dev/null 2>&1 || sleep 2
+
 # codex 起動。`herdr pane run` はテキスト+Enter を1リクエストで送る
 if [ -n "$_codex_root" ]; then
   herdr pane run "$CODEX_PANE" "cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox -c 'projects={\"$_codex_root\"={trust_level=\"trusted\"}}' \"\$(cat /tmp/codex-prompt.txt)\""
@@ -406,6 +410,12 @@ herdr wait output "$CODEX_PANE" --match '[❯›]' --regex --timeout 600000 \
 注: codex 起動直後や作業中も入力枠のグリフが画面に残っていて早期マッチすることがある。
 その場合でも H-Step 4 の送信前ガード（最終行判定）で弾かれるので、少し待ってから
 wait を再実行して待ち直すこと。
+
+注2（偽マッチの罠・実測）: `wait output` は pane に表示された**コマンドのエコー行**にも
+マッチする。任意のマーカー文字列（例: `echo MARKER_OK` の完了検知）を待つ場合、
+タイプした瞬間にコマンド行自身へマッチして「実行完了前」に抜けてしまう。
+マーカー待ちをする時は `echo DONE_MARK''ER_OK` のように「タイプ文字列と出力が
+異なる」形で送ること。本 skill の `[❯›]` プロンプト待ちはコマンド行に含まれないため安全。
 
 ### H-Step 3: 結果読み取り
 
