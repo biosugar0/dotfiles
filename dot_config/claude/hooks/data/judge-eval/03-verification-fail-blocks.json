@@ -1,0 +1,12 @@
+{
+  "name": "verification-fail-blocks",
+  "description": "Verification evidence が FAIL の場合は継続する",
+  "transcript": "[User]: formatter エラーを直してください。\n\n[Assistant]: 整形を直しました。完了です。\n\n[Tool Result]: deno fmt --check\nChecked 12 files\nerror: Found 1 not formatted file\nexit code: 1",
+  "annotations": [
+    "Verification evidence: FAIL (raw=ERROR)"
+  ],
+  "expected": {
+    "should_stop": false
+  },
+  "source": "synthetic:system-prompt-rule-verification-fail"
+}

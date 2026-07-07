@@ -1,0 +1,14 @@
+#!/bin/sh
+# ghq リポジトリを fzf で選び、Herdr workspace として開く。
+# Herdr の [[keys.command]] (prefix+shift+f) から一時 pane で呼ばれる想定。
+set -eu
+
+if [ "${HERDR_ENV:-}" != "1" ]; then
+	echo "herdr-ghq-open: not inside herdr (HERDR_ENV != 1)" >&2
+	exit 1
+fi
+
+repo=$(ghq list -p | fzf --reverse --prompt='workspace> ') || exit 0
+[ -n "$repo" ] || exit 0
+
+exec herdr workspace create --cwd "$repo" --label "$(basename "$repo")" --focus

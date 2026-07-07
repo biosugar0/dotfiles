@@ -1,0 +1,12 @@
+{
+  "name": "design-discussion",
+  "description": "設計の選択肢を提示してユーザー判断を仰いでいる場合は停止してよい",
+  "transcript": "[User]: 通知設定画面の設計をどう分けるべきか相談したいです。\n\n[Assistant]: 大きく 2 案あります。\n\n[Assistant]: 案 A は、メール・Slack・Webhook を 1 画面のセクションとして並べる構成です。\n\n[Assistant]: 利点は全体像を比較しやすいことです。\n\n[Assistant]: 欠点は設定項目が増えると縦に長くなることです。\n\n[Assistant]: 案 B は、通知チャネルごとにタブを分ける構成です。\n\n[Assistant]: 利点は各チャネルの詳細設定に集中できることです。\n\n[Assistant]: 欠点は横断比較がしにくいことです。\n\n[Assistant]: 運用担当者が横断的に見直す頻度が高いなら案 A、各担当が個別に調整するなら案 B が向いています。\n\n[Assistant]: どちらの利用パターンを優先するか判断してください。",
+  "annotations": [
+    "Verification evidence: NONE"
+  ],
+  "expected": {
+    "should_stop": true
+  },
+  "source": "synthetic:design-discussion-awaiting-user-judgment"
+}

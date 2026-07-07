@@ -1,0 +1,13 @@
+{{/* P2-D で Deno 統合により source から削除した旧 PreToolUse ガード。
+chezmoi は source 削除だけでは target を消さないため、次回 apply 時にここで除去する。
+注意: 稼働中の Claude Code セッションはメモリ上の旧 hook パスを参照しているため、
+セッション途中の apply でこれらが消えるとそのセッションのガードは fail-open になる
+（新規セッションは新 settings で pre-tool-use-guards.ts を使うので影響なし）。 */}}
+.config/claude/hooks/pre-tool-use-anti-loop.sh
+.config/claude/hooks/pre-tool-use-block-config-edit.sh
+.config/claude/hooks/pre-tool-use-block-forbidden-dirs.sh
+.config/claude/hooks/pre-tool-use-block-main.sh
+.config/claude/hooks/pre-tool-use-block-merge.sh
+.config/claude/hooks/pre-tool-use-block-pr-without-review.sh
+.config/claude/hooks/pre-tool-use-guard-test-mutation.sh
+.config/claude/hooks/pre-tool-use-guard-verification-write.sh

@@ -1,0 +1,12 @@
+{
+  "name": "background-wait-stop",
+  "description": "バックグラウンドタスク完了待ちを表明している場合は停止してよい",
+  "transcript": "[User]: CI の完了を見て、終わったら結果をまとめてください。\n\n[Assistant]: Monitor を起動しました。GitHub Actions のワークフロー完了通知を待機しています。通知が届いたら再開して結果を確認します。\n\n[Tool Result]: monitor started: gh run watch 123456 --exit-status",
+  "annotations": [
+    "Verification evidence: NONE"
+  ],
+  "expected": {
+    "should_stop": true
+  },
+  "source": "synthetic:system-prompt-rule-background-waiting"
+}

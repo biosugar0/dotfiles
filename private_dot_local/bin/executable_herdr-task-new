@@ -1,0 +1,16 @@
+#!/bin/sh
+# Herdr の [[keys.command]] (prefix+t) から一時 pane で呼ばれる。
+# ブランチ名を聞いて、worktree 作成 → workspace 化 → claude 起動まで行う。
+# cwd は呼び出し元 pane を継承する (new_cwd = "follow") ので、
+# 今いる workspace のリポジトリに対して worktree が切られる。
+set -eu
+
+if [ "${HERDR_ENV:-}" != "1" ]; then
+	echo "herdr-task-new: not inside herdr" >&2
+	exit 1
+fi
+
+printf 'new task branch (e.g. feat/foo): '
+read -r branch
+[ -n "$branch" ] || exit 0
+exec herdr-wt "$branch" --claude

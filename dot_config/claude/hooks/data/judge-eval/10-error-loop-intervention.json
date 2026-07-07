@@ -1,0 +1,13 @@
+{
+  "name": "error-loop-intervention",
+  "description": "Active goal があり同一エラー 3 回相当の SPIN WARNING がある場合は Human Intervention Point として停止してよい",
+  "transcript": "[User]: 型エラーがゼロになるまで修正してください。\n\n[Assistant]: `deno check` の失敗箇所を直します。\n\n[Tool Result]: deno check src/main.ts\nTS2322: Type 'string' is not assignable to type 'number'.\nexit code: 1\n\n[Assistant]: 型変換を追加して再確認します。\n\n[Tool Result]: deno check src/main.ts\nTS2322: Type 'string' is not assignable to type 'number'.\nexit code: 1\n\n[Assistant]: 別の呼び出し元を修正して再確認します。\n\n[Tool Result]: deno check src/main.ts\nTS2322: Type 'string' is not assignable to type 'number'.\nexit code: 1\n\n[Assistant]: 同じ型エラーが続いています。前提の型設計を見直す必要があります。",
+  "annotations": [
+    "Active goal（4ターン目）: 型エラーがゼロになる\n⚠️ SPIN WARNING: 3回連続で同様の出力。アプローチ変更が必要。",
+    "Verification evidence: NONE"
+  ],
+  "expected": {
+    "should_stop": true
+  },
+  "source": "synthetic:active-goal-spin-warning-human-intervention"
+}

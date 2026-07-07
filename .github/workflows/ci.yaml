@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: brew install chezmoi go
+
+      - name: Apply dotfiles (dry-run)
+        run: chezmoi init --source=$PWD --apply --dry-run
+
+      - name: Apply dotfiles
+        run: chezmoi init --source=$PWD --apply
+
+      - name: Verify no drift
+        run: chezmoi verify --source=$PWD
+
+      - name: Check chezmoi health
+        run: chezmoi doctor --source=$PWD
+
+      - name: Verify files exist
+        run: |
+          echo "=== Checking applied files ==="
+          ls -la ~/.zshenv
+          ls -la ~/.config/zsh/
+          ls -la ~/.config/git/
+          ls -la ~/.config/nvim/
+          echo "=== All checks passed ==="

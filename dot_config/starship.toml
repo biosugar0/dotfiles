@@ -1,0 +1,164 @@
+"$schema" = "https://starship.rs/config-schema.json"
+
+# プロンプトフォーマット
+format = """
+$directory\
+$git_branch\
+$git_commit\
+$git_state\
+$git_status\
+$git_metrics\
+$docker_context\
+$golang\
+$rust\
+$nodejs\
+$deno\
+$lua\
+$python\
+$terraform\
+$aws\
+$jobs\
+$status\
+$fill\
+$cmd_duration\
+$battery\
+$time\
+$line_break\
+$character"""
+
+add_newline = true
+command_timeout = 500
+
+[fill]
+symbol = "─"
+style = "dim white"
+
+[time]
+disabled = false
+format = "[$time]($style)"
+style = "dim white"
+time_format = "%H:%M"
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+vimcmd_symbol = "[❮](bold green)"
+vimcmd_visual_symbol = "[❮](bold yellow)"
+vimcmd_replace_symbol = "[❮](bold purple)"
+
+[directory]
+truncation_length = 3
+truncate_to_repo = false
+fish_style_pwd_dir_length = 1
+style = "cyan bold"
+read_only = "🔒"
+
+[git_branch]
+symbol = " "
+style = "bold purple"
+
+[git_commit]
+commit_hash_length = 7
+style = "green bold"
+only_detached = true
+tag_symbol = " 🏷 "
+
+[git_state]
+style = "bold yellow"
+
+[git_status]
+format = '( $all_status$ahead_behind)'
+style = "bright-green"
+staged = "[󰐗 ](bright-green)"
+modified = "[󰏫 ](bright-green)"
+untracked = "[󰐕 ](bright-green)"
+deleted = "[󰍴 ](bright-green)"
+stashed = "[󰆓 ](bright-green)"
+renamed = "[󰑐 ](bright-green)"
+conflicted = "[󰀨 ](bright-green)"
+ahead = "[󰞙 ](bright-green)"
+behind = "[󰞒 ](bright-green)"
+diverged = "[󰹹 ](bright-green)"
+
+[git_metrics]
+disabled = false
+added_style = "bold green"
+deleted_style = "bold red"
+format = "([+$added]($added_style) )([-$deleted]($deleted_style) )"
+
+[docker_context]
+symbol = "🐳 "
+style = "blue bold"
+only_with_files = true
+
+[golang]
+symbol = "🐹 "
+style = "bold cyan"
+
+[rust]
+symbol = "🦀 "
+style = "bold red"
+
+[nodejs]
+symbol = " "
+style = "bold green"
+
+[deno]
+symbol = "🦕 "
+style = "green bold"
+
+[lua]
+symbol = "🌙 "
+style = "bold blue"
+
+[python]
+symbol = "🐍 "
+style = "yellow bold"
+format = 'via [${symbol}(${version} )(\($virtualenv\) )]($style)'
+
+[terraform]
+symbol = "💠 "
+style = "bold 105"
+format = "via [$symbol$workspace]($style) "
+
+[aws]
+format = '[$symbol($profile )(\($duration\) )]($style)'
+symbol = ""
+style = "bold yellow"
+expiration_symbol = "⚠️"
+
+[cmd_duration]
+min_time = 3000
+format = "[$duration]($style) "
+style = "yellow bold"
+show_notifications = true
+min_time_to_notify = 120000
+
+[jobs]
+symbol = "✦"
+style = "bold blue"
+
+[battery]
+disabled = false
+format = "[$symbol$percentage]($style) "
+
+[[battery.display]]
+threshold = 10
+style = "red bold"
+
+[[battery.display]]
+threshold = 30
+style = "yellow"
+
+[status]
+disabled = false
+format = "[$symbol$status]($style) "
+symbol = "✘ "
+success_symbol = ""
+not_executable_symbol = "🚫"
+not_found_symbol = "🔍"
+sigint_symbol = "🧱"
+signal_symbol = "⚡"
+style = "bold red"
+map_symbol = true
+recognize_signal_code = true

@@ -1,0 +1,12 @@
+{
+  "name": "follow-up-offer",
+  "description": "一問一答に回答済みで任意のフォローアップを提案している場合は停止してよい",
+  "transcript": "[User]: Git で直前のコミットメッセージだけを変更するには？\n\n[Assistant]: 直前のコミットメッセージだけなら `git commit --amend -m \"新しいメッセージ\"` を使います。\n\n[Assistant]: まだ push していないコミットならこれで完了です。\n\n[Assistant]: すでにリモートへ push 済みなら、履歴を書き換えるので `git push --force-with-lease` が必要になります。\n\n[Assistant]: 共有ブランチでは事前にチームへ確認してください。\n\n[Assistant]: 必要なら、複数コミット前のメッセージを直す `git rebase -i` の手順も説明できます。",
+  "annotations": [
+    "Verification evidence: NONE"
+  ],
+  "expected": {
+    "should_stop": true
+  },
+  "source": "synthetic:follow-up-offer-is-not-incomplete-task"
+}
