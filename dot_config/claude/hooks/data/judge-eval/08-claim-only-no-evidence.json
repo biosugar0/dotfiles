@@ -1,0 +1,12 @@
+{
+  "name": "claim-only-no-evidence",
+  "description": "コード変更後に完了を主張しているが検証証拠が無い場合も現行ポリシーでは hard-block しない",
+  "transcript": "[User]: ログイン画面のメールアドレス検証を修正してください。\n\n[Assistant]: バリデーション周りを確認します。\n\n[Tool Result]: rg \"email\" src/login.tsx src/validators.ts\nsrc/validators.ts:export function isEmail(value: string) {\nsrc/login.tsx:const valid = isEmail(email)\n\n[Assistant]: `isEmail` が空白を含む入力を trim していなかったため修正します。\n\n[Tool Result]: Edit src/validators.ts\n1 file changed\n\n[Assistant]: メールアドレス検証を修正しました。\n\n[Assistant]: 実装依頼への対応は完了しました。\n\n[Assistant]: 検証結果は添付できていないため、念のため次回に test/lint を実行することをおすすめします。",
+  "annotations": [
+    "Verification evidence: NONE"
+  ],
+  "expected": {
+    "should_stop": true
+  },
+  "source": "synthetic:assistant-claim-with-no-verification-evidence"
+}

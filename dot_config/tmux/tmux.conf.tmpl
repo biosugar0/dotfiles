@@ -1,0 +1,220 @@
+{{- /*
+  Optional per-machine data (set in ~/.config/chezmoi/chezmoi.toml):
+    [data.hub]
+      new_issue_cmd  = "/path/to/private/hub/scripts/new-issue-session.sh"
+      new_pm_cmd     = "/path/to/private/hub/scripts/new-pm-session.sh"
+      start_task_cmd = "/path/to/private/hub/scripts/start-task.sh"
+      repo           = "org/hub-repo"
+  When unset, M-i falls back to plain `new-session` and hub-specific
+  bindings are omitted. Keeps this public config vendor-neutral.
+  Note: Alt+C / Alt+Shift+C are reserved by aerospace (workspace C),
+  so the issue picker uses Alt+i (mnemonic: issue) instead.
+  M-m は aerospace と衝突しないことを確認済 (mnemonic: management)。
+*/ -}}
+{{- $newIssueCmd := dig "hub" "new_issue_cmd" "" . -}}
+{{- $newPmCmd := dig "hub" "new_pm_cmd" "" . -}}
+# =============================================================================
+# 基本設定
+# =============================================================================
+
+# True color サポート (Neovim等に必要)
+set -g default-terminal "tmux-256color"
+set -ag terminal-overrides ",xterm-256color:RGB"
+
+# エスケープシーケンスの遅延をなくす
+set -s escape-time 0
+
+# フォーカスイベントを有効化 (Vim/Neovim連携)
+set -g focus-events on
+
+# 履歴を増やす
+set -g history-limit 50000
+
+# ウィンドウ・ペイン番号を1から開始
+set -g base-index 1
+setw -g pane-base-index 1
+
+# ウィンドウを閉じたら自動でリナンバー
+set -g renumber-windows on
+
+# ウィンドウ名の自動リネームを無効化
+set -g allow-rename off
+
+# マウス有効化
+setw -g mouse on
+
+# クリップボード連携
+set -g set-clipboard on
+
+# 拡張キーサポート (tmux 3.5+)
+set -g extended-keys on
+
+# OSC passthrough (WezTerm の OSC 777 通知等を外側端末に届ける)
+# "all" は非アクティブ pane / 非可視 window からも passthrough する。
+# Claude pane が裏で動いている時も通知を届けたいので "on" ではなく "all"。
+set -g allow-passthrough all
+
+# =============================================================================
+# 外観設定
+# =============================================================================
+
+# ステータスバー
+set -g status-position top
+set -g status-interval 5
+set -g status-justify centre
+set -g status-left-length 90
+set -g status-right-length 90
+
+set -g status-fg "colour255"
+set -g status-bg "colour016"
+set -g status-left "#[fg=colour016,bg=colour075,bold] #S #[fg=colour075,bg=colour016,nobold]"
+set -g status-right '#[bold]#(~/.config/tmux/claude-count.sh)| CPU:#{cpu_percentage} | Battery: #{battery_icon}  #{battery_percentage} | [%Y-%m-%d(%a) %H:%M] '
+
+# ウィンドウステータス
+setw -g window-status-separator ''
+setw -g window-status-style fg=default,bg=colour016
+setw -g window-status-activity-style fg=default,bg=colour016
+setw -g window-status-format '#[fg=colour016,bg=colour016]#[default] #W#F #[fg=colour016,bg=colour016]'
+setw -g window-status-current-format '#[fg=colour016,bg=colour238]#[fg=colour087,bg=colour238] #W#F #[fg=colour238,bg=colour016]'
+
+# ペインボーダー
+set -g pane-border-style "bg=colour016,fg=#89b8c2"
+set -g pane-active-border-style "bg=colour016,fg=#89b8c2"
+set -g pane-border-status bottom
+set -g pane-border-format "#(tmux-pane-border '#{pane_current_path}')"
+
+# 非アクティブペインを暗くする
+set -g window-style 'bg=colour239'
+set -g window-active-style 'bg=colour016'
+
+# コピーモードのスタイル (tmux 3.6+)
+set -g copy-mode-current-match-style "bg=yellow,fg=black"
+set -g copy-mode-match-style "bg=cyan,fg=black"
+
+# =============================================================================
+# キーバインド
+# =============================================================================
+
+# Prefix キー
+unbind-key C-b
+set -g prefix C-b
+bind-key C-b send-prefix
+
+# 設定リロード
+bind r source-file ~/.config/tmux/tmux.conf \; display-message "Config reloaded!"
+
+# ペイン分割 (カレントパス維持)
+bind -n M-v split-window -h -c "#{pane_current_path}"
+bind -n M-s split-window -v -c "#{pane_current_path}"
+
+# ウィンドウ操作
+unbind n
+unbind p
+unbind Tab
+bind -n M-Enter new-window -c "#{pane_current_path}"
+bind -n M-] next-window
+bind -n M-[ previous-window
+
+# ウィンドウの並び替え
+bind -n M-Left run "tmux swap-window -t -1 && tmux previous-window"
+bind -n M-Right run "tmux swap-window -t +1 && tmux next-window"
+
+# 全ペイン同期 ON/OFF
+bind a setw synchronize-panes \; display "synchronize-panes #{?pane_synchronized,on,off}"
+
+# セッション操作
+# Alt+i でこのバインドを発火する。Alt+C / Alt+Shift+C は aerospace が
+# workspace C (Communication) に予約しているため、tmux まで届かない。
+{{- if $newIssueCmd }}
+bind -n "M-i" display-popup -E -w 80% -h 70% {{ $newIssueCmd | quote }}
+{{- else }}
+bind -n M-i new-session
+{{- end }}
+
+# PM session (task 管理・board・triage) 切替。IC 作業 session と分離して
+# claude の context window を節約する (mnemonic: M-m = management)。
+# #{client_name} を渡すことで multi-client 時も「押した端末」を切替対象にする。
+{{- if $newPmCmd }}
+bind -n "M-m" run-shell {{ printf "%s '#{client_name}'" $newPmCmd | quote }}
+{{- end }}
+
+# fzf連携 (-k でキー押下で閉じる)
+bind -n M-a choose-tree
+bind -n "M-'" display-popup -E -k "tmux list-sessions -F '#S' | grep -v \"^$(tmux display-message -p '#S')\$\" | fzf --reverse | xargs tmux switch -t"
+bind -n "M-;" display-popup -E -k "tmux list-windows -F '#W' | grep -v \"^$(tmux display-message -p '#W')\$\" | fzf --reverse | xargs | xargs tmux select-window -t"
+
+# Claude pane picker (preview付き)
+bind -n "M-p" display-popup -E -w 80% -h 70% "~/.config/tmux/claude-pane-picker.sh"
+
+# =============================================================================
+# コピーモード (vi スタイル)
+# =============================================================================
+
+setw -g mode-keys vi
+bind-key -T copy-mode-vi v send-keys -X begin-selection
+bind-key -T copy-mode-vi y send-keys -X copy-pipe-and-cancel "pbcopy"
+bind-key -T copy-mode-vi Enter send-keys -X copy-pipe-and-cancel "pbcopy"
+bind-key -T copy-mode-vi MouseDragEnd1Pane send -X copy-pipe-and-cancel "pbcopy"
+bind-key -T copy-mode C-u send-keys -X page-up
+bind-key -T copy-mode C-d send-keys -X page-down
+
+# =============================================================================
+# Vim/Neovim/Claude 連携ナビゲーション
+# =============================================================================
+
+bind -n C-w switch-client -T NAVIGATOR
+is_vim="ps -o state= -o comm= -t '#{pane_tty}' \
+    | grep -iqE '^[^TXZ ]+ +(\\S+\\/)?g?(view|n?vim?x?)(diff)?$'"
+is_claude="ps -o comm= -t '#{pane_tty}' | grep -qE '(claude|node.*claude)'"
+
+bind -T NAVIGATOR 'h' if-shell "$is_vim" "send-keys C-w h" {
+  if-shell "$is_claude" 'run-shell "/Users/ykimura/ghq/github.com/biosugar0/dotfiles/bin/tmux-smart-switch-pane left"' "select-pane -L"
+}
+bind -T NAVIGATOR 'j' if-shell "$is_vim" "send-keys C-w j" {
+  if-shell "$is_claude" 'run-shell "/Users/ykimura/ghq/github.com/biosugar0/dotfiles/bin/tmux-smart-switch-pane down"' "select-pane -D"
+}
+bind -T NAVIGATOR 'k' if-shell "$is_vim" "send-keys C-w k" {
+  if-shell "$is_claude" 'run-shell "/Users/ykimura/ghq/github.com/biosugar0/dotfiles/bin/tmux-smart-switch-pane up"' "select-pane -U"
+}
+bind -T NAVIGATOR 'l' if-shell "$is_vim" "send-keys C-w l" {
+  if-shell "$is_claude" 'run-shell "/Users/ykimura/ghq/github.com/biosugar0/dotfiles/bin/tmux-smart-switch-pane right"' "select-pane -R"
+}
+bind -T NAVIGATOR C-w send-keys C-w
+
+# editprompt (v1.0.0 Interactive workflow)
+bind -n M-q run-shell '\
+  editprompt resume --target-pane #{pane_id} || \
+  tmux split-window -v -l 10 -c "#{pane_current_path}" \
+    "editprompt open --editor nvim --always-copy --target-pane #{pane_id}"'
+
+# editprompt quote収集 (copy-mode-viでC-e)
+bind-key -T copy-mode-vi C-e send-keys -X pipe "editprompt collect --target-pane #{pane_id}"
+
+# =============================================================================
+# プラグイン (TPM)
+# =============================================================================
+
+# TPM プラグインディレクトリ
+set-environment -g TMUX_PLUGIN_MANAGER_PATH '~/.tmux/plugins/'
+set-environment -g PATH "/opt/homebrew/bin:$PATH"
+
+# プラグイン
+set -g @plugin 'tmux-plugins/tpm'
+set -g @plugin 'tmux-plugins/tmux-sensible'
+set -g @plugin 'tmux-plugins/tmux-battery'
+set -g @plugin 'tmux-plugins/tmux-cpu'
+set -g @plugin 'tmux-plugins/tmux-open'
+set -g @plugin 'tmux-plugins/tmux-resurrect'
+set -g @plugin 'tmux-plugins/tmux-continuum'
+
+# TPM 自動インストール
+if "test ! -d ~/.tmux/plugins/tpm" \
+   "run 'git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm && ~/.tmux/plugins/tpm/bin/install_plugins'"
+
+# Resurrect/Continuum 設定
+set -g @continuum-save-interval '1'
+set -g @resurrect-strategy-vim 'session'
+set -g @continuum-restore 'on'
+
+# TPM 実行
+run-shell -b 'export PATH="/opt/homebrew/bin:$PATH"; ~/.tmux/plugins/tpm/tpm'

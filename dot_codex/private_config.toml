@@ -1,0 +1,15 @@
+model = "gpt-5.5"
+disable_response_storage = true
+sandbox_mode = "workspace-write"
+model_reasoning_effort = "xhigh"
+web_search = "live"
+
+[features]
+voice_transcription = true
+
+[sandbox_workspace_write]
+network_access = true
+
+[notice]
+hide_gpt5_1_migration_prompt = true
+"hide_gpt-5.1-codex-max_migration_prompt" = true

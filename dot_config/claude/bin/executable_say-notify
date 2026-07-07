@@ -1,0 +1,25 @@
+#!/bin/bash
+# say-notify: macOS `say` wrapper that escapes the cage sandbox via launchctl asuser.
+#
+# Why: Claude Code runs under cage's sandbox-exec which imports system.sb and does
+# not allow mach-lookup to speechsynthesisd. Direct `say` returns exit=0 silently.
+# `launchctl asuser $UID` spawns the process in the user's GUI session bootstrap,
+# which does not inherit the caller's sandbox, so speech synthesis works.
+#
+# Usage:
+#   say-notify "処理が完了しました"
+#   say-notify -r 220 "エラー発生"
+#
+# Mute: set CLAUDE_SAY_MUTE=1 to skip.
+set -euo pipefail
+
+if [[ "${CLAUDE_SAY_MUTE:-0}" = "1" ]]; then
+  exit 0
+fi
+
+if [[ $# -eq 0 ]]; then
+  echo "usage: say-notify [say options] <text>" >&2
+  exit 2
+fi
+
+exec /bin/launchctl asuser "$(id -u)" /usr/bin/say "$@"

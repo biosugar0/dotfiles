@@ -1,0 +1,465 @@
+{{- $privateRepo := dig "private_marketplace" "repo" "" . -}}
+{{- $privateName := dig "private_marketplace" "name" "" . -}}
+{{- $privatePlugins := dig "private_marketplace" "plugins" (list) . -}}
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "model": "claude-opus-4-6[1m]",
+  "fallbackModel": ["claude-opus-4-7[1m]", "claude-opus-4-6[1m]", "claude-sonnet-5[1m]"],
+  "outputStyle": "default",
+  "effortLevel": "xhigh",
+  "env": {
+    "CLAUDE_CODE_EFFORT_LEVEL": "max",
+    "BASH_DEFAULT_TIMEOUT_MS": "300000",
+    "MCP_TOOL_TIMEOUT": "1200000",
+    "MCP_TIMEOUT": "3600000",
+    "MAX_MCP_OUTPUT_TOKENS": "50000",
+    "BASH_MAX_TIMEOUT_MS": "1200000",
+    "DISABLE_AUTOUPDATER": "1",
+    "DISABLE_BUG_COMMAND": "1",
+    "DISABLE_ERROR_REPORTING": "1",
+    "API_TIMEOUT_MS": "1200000",
+    "DISABLE_COST_WARNINGS": "0",
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "RUST_LOG": "warn",
+    "CLAUDE_CODE_SHELL": "/bin/zsh",
+    "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS": "53000",
+    "CLAUDE_CODE_NO_FLICKER": "1",
+    "CLAUDE_CODE_DISABLE_MOUSE": "0",
+    "CLAUDE_CODE_STOP_HOOK_BLOCK_CAP": "30"
+  },
+  "permissions": {
+    "allow": [
+      "mcp__gpt-5",
+      "Bash(playwright-cli *)",
+      "Bash(obsidian *)",
+      "mcp__context7",
+      "Bash(macos-notify-cli *)",
+      "List(*)",
+      "Edit(*)",
+      "MultiEdit(*)",
+      "Glob(*)",
+      "WebFetch",
+      "WebSearch",
+      "Read(~/ghq/**)",
+      "Write(~/ghq/**)",
+      "Edit(~/ghq/**)",
+      "Read(~/.claude/**)",
+      "Read(~/.config/**)",
+      "Bash(git *)",
+      "Bash(npm *)",
+      "Bash(yarn *)",
+      "Bash(pnpm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(bun *)",
+      "Bash(tsx *)",
+      "Bash(tsc *)",
+      "Bash(eslint *)",
+      "Bash(prettier *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(uv *)",
+      "Bash(poetry *)",
+      "Bash(pytest *)",
+      "Bash(ruff *)",
+      "Bash(go *)",
+      "Bash(cargo *)",
+      "Bash(make *)",
+      "Bash(gh *)",
+      "Bash(chezmoi *)",
+      "Bash(cage -- codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox *)",
+      "Bash(pup *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(jq *)",
+      "Bash(yq *)",
+      "Bash(mkdir *)",
+      "Bash(touch *)",
+      "Bash(rm *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(chmod *)",
+      "Bash(which *)",
+      "Bash(pwd)",
+      "Bash(echo *)",
+      "Bash(say *)",
+      "Bash(open *)",
+      "Bash(pbcopy)",
+      "Bash(pbpaste)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf /*)",
+      "Bash(sudo rm:*)",
+      "Bash(dd:*)",
+      "Bash(sudo dd:*)",
+      "Bash(mkfs:*)",
+      "Bash(sudo mkfs:*)",
+      "Bash(fdisk:*)",
+      "Bash(sudo fdisk:*)",
+      "Bash(> /dev/*)",
+      "Bash(>> /dev/*)",
+      "Bash(docker system prune -af)",
+      "Bash(chmod 777 /*)",
+      "Bash(chown root:*)",
+      "Bash(sudo chmod 777:*)",
+      "Bash(sudo chown:*)",
+      "Bash(sudo -i:*)",
+      "Bash(sudo su:*)",
+      "Bash(sudo mount:*)",
+      "Bash(sudo umount:*)",
+      "Bash(sudo passwd:*)",
+      "Bash(rm -rf .git)",
+      "Bash(git commit *--no-verify*)",
+      "Bash(git push *--no-verify*)",
+      "Bash(git rebase *--no-verify*)",
+      "Bash(git push --force-with-lease origin main)",
+      "Bash(git push -f origin main)",
+      "Bash(npm publish:*)",
+      "Bash(deno publish:*)",
+      "Edit(/etc/**)",
+      "Edit(/usr/**)",
+      "Edit(/var/**)",
+      "Edit(/opt/**)",
+      "Edit(/bin/**)",
+      "Edit(/sbin/**)",
+      "Edit(/dev/**)",
+      "Edit(/etc/passwd)",
+      "Edit(/etc/sudoers)",
+      "Write(/etc/**)",
+      "Write(/usr/**)",
+      "Write(/var/**)",
+      "Write(/opt/**)",
+      "Write(/bin/**)",
+      "Write(/sbin/**)",
+      "Write(/dev/**)",
+      "Write(/etc/passwd)",
+      "Write(/etc/sudoers)",
+      "Edit(~/.ssh/id_*)",
+      "Edit(~/.ssh/*_rsa)",
+      "Edit(~/.ssh/*_ecdsa)",
+      "Edit(~/.ssh/*_ed25519)",
+      "Write(~/.ssh/id_*)",
+      "Write(~/.ssh/*_rsa)",
+      "Write(~/.ssh/*_ecdsa)",
+      "Write(~/.ssh/*_ed25519)",
+      "Read(id_rsa)",
+      "Read(id_ed25519)",
+      "Write(~/.zshrc)",
+      "Write(~/.zprofile)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(.dev.vars)",
+      "Read(.dev.vars.*)",
+      "Write(.env*)",
+      "Write(**/secrets/**)"
+{{- range (dig "private_marketplace" "disabled_skills" (list) .) }},
+      "Skill({{ . }})"
+{{- end }}
+    ],
+    "defaultMode": "bypassPermissions",
+    "additionalDirectories": [
+      "{{ .chezmoi.homeDir }}/.config/claude/plans/"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/session-start.ts",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/session-start.ts",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash '{{ .chezmoi.homeDir }}/.config/claude/hooks/herdr-agent-state.sh' session",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/herdr-pane-title.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "auto|manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/pre-compact-save.ts",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "auto|manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/post-compact-save.sh",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/pre-tool-use-guards.ts",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/pre-tool-use-route-subagent-to-codex.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/pre-tool-use-guards.ts",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/post-tool-use-eol.ts",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/post-tool-use-anti-loop-record.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "WebFetch|WebSearch|mcp__fetch-mcp__fetch_url|mcp__fetch-mcp__fetch_youtube_transcript|mcp__readability__read_url_content_as_markdown",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/post-tool-use-untrusted-fetch-guard.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/post-tool-use-anti-loop-record.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "elicitation_dialog",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /System/Library/Sounds/Sosumi.aiff",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/osc-notify.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/userpromptsubmit-context.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/herdr-pane-title.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/stop-hook.ts",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /System/Library/Sounds/Submarine.aiff",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /System/Library/Sounds/Blow.aiff",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/hooks/session-end-handoff.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/bin/cc-transcript-sanitize --hook",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '⚙️ 設定ファイルが変更されました' >&2; afplay /System/Library/Sounds/Purr.aiff",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "{{ .chezmoi.homeDir }}/ghq/github.com/biosugar0/dotfiles/bin/cc-statusline.ts"
+  },
+  "enabledPlugins": {
+    "context7@claude-plugins-official": true,
+    "document-skills@anthropic-agent-skills": true,
+    "frontend-design@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "obsidian@obsidian-skills": true,
+    "duckdb-skills@duckdb-skills": true
+{{- range $privatePlugins }},
+    "{{ . }}@{{ $privateName }}": true
+{{- end }}
+  },
+  "extraKnownMarketplaces": {
+    "local-plugins": {
+      "source": {
+        "source": "directory",
+        "path": "{{ .chezmoi.homeDir }}/.config/claude/plugins"
+      }
+    },
+    "obsidian-skills": {
+      "source": {
+        "source": "github",
+        "repo": "kepano/obsidian-skills"
+      }
+    },
+    "duckdb-skills": {
+      "source": {
+        "source": "github",
+        "repo": "duckdb/duckdb-skills"
+      }
+    }
+{{- if $privateRepo }},
+    "{{ $privateName }}": {
+      "source": {
+        "source": "github",
+        "repo": "{{ $privateRepo }}"
+      }
+    }
+{{- end }}
+  },
+  "plansDirectory": "{{ .chezmoi.homeDir }}/.config/claude/plans",
+  "cleanupPeriodDays": 90,
+  "showTurnDuration": true,
+  "spinnerVerbs": {"mode": "replace", "verbs": ["かたかた", "もくもく"]},
+  "language": "Japanese",
+  "alwaysThinkingEnabled": true,
+  "skipDangerousModePermissionPrompt": true,
+  "remoteControlEnabled": true,
+  "agentPushNotifEnabled": true,
+  "inputNeededNotifEnabled": true,
+  "autoMemoryEnabled": false,
+  "voice": {
+    "mode": "hold",
+    "autoSubmit": true
+  }
+}

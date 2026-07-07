@@ -1,0 +1,216 @@
+presets:
+  # 基本プリセット（共通パス）
+  base:
+    allow:
+      - "."
+      - path: "/tmp"
+        eval-symlinks: true  # macOSで /private/tmp に自動解決
+      - "/dev/tty"
+      - "/var/folders/"
+      - "$HOME/.cache/"
+      - "$HOME/.local/"
+      - "$HOME/Library/Caches/"
+      - "$HOME/Library/Logs/"
+      - "$HOME/Library/Preferences/"
+      - "$HOME/Library/Saved Application State/"
+      - "$HOME/Downloads/"
+      - "$HOME/Desktop/"
+    allow-keychain: true
+    allow-git: true
+
+  # Node.js/npm関連
+  npm:
+    allow:
+      - "$HOME/.npm"
+      - "$HOME/.node/"
+      - "$HOME/.nvm/"
+      - "$HOME/.yarn/"
+      - "$HOME/.pnpm-store/"
+
+  # Python関連
+  python:
+    allow:
+      - "$HOME/.pyenv/"
+      - "$HOME/.virtualenvs/"
+      - "$HOME/.poetry/"
+      - "$HOME/.ruff/"
+      - "$HOME/.uv/"
+
+  # Rust関連
+  rust:
+    allow:
+      - "$HOME/.cargo/"
+      - "$HOME/.rustup/"
+
+  # Git/SSH関連
+  git:
+    allow:
+      - "$HOME/.ssh/"
+      - "$HOME/.gitconfig"
+
+  # AWS関連
+  aws:
+    allow:
+      - "$HOME/.aws/cli/cache/"
+      - "$HOME/.aws/sso"
+
+  # ブラウザ関連（Playwright等）
+  browser:
+    allow:
+      - "$HOME/Library/Application Support/Google/Chrome/"
+      - "$HOME/Library/Application Support/Chromium/"
+      - "$HOME/Library/Caches/com.google.Chrome/"
+      - "$HOME/Library/Application Support/Google/Chrome/Default/"
+      - "$HOME/Library/Application Support/Google/Chrome/Profile*/"
+      - "$HOME/Library/Application Support/CrashReporter/"
+      - "/Applications/Google Chrome.app/"
+      - "/Applications/Google Chrome Beta.app/"
+      - "/Applications/Google Chrome Canary.app/"
+      - "/Applications/Chromium.app/"
+      - "/System/Library/Extensions/"
+      - "/System/Library/Frameworks/"
+      - "/usr/lib/"
+      - "/usr/libexec/"
+      - "/private/var/db/"
+      - "/Library/GPUBundles/"
+
+  # draw.io（Electronアプリ）
+  drawio:
+    allow:
+      - "/Applications/draw.io.app/"
+      - "/opt/homebrew/Caskroom/drawio/"
+      - "$HOME/Library/Application Support/draw.io/"
+      - "$HOME/Library/Caches/draw.io/"
+      - "$HOME/Library/Preferences/com.jgraph.drawio.desktop.plist"
+      - "/System/Library/Extensions/"
+      - "/System/Library/Frameworks/"
+      - "/System/Library/PrivateFrameworks/"
+      - "/usr/lib/"
+      - "/usr/libexec/"
+      - "/private/var/db/"
+      - "/Library/GPUBundles/"
+      - "/System/Library/Components/"
+      - "/private/var/run/mDNSResponder"
+      - "/private/etc/hosts"
+
+  # AI/LLMツール共通
+  ai-tools:
+    allow:
+      - "$CLAUDE_CONFIG_DIR/"
+      - "$HOME/.claude/"
+      - "$HOME/.codex/"
+      - "$HOME/.serena/"
+      - "$HOME/.config/mcp/"
+      - "$HOME/.continue/"
+      - "$HOME/ghq/github.com/"
+      - "$HOME/Library/Application Support/Code/"
+
+  # Claude Code / Codex 統合プリセット（全部入り）
+  claude-code:
+    allow:
+      - "."
+      - path: "/tmp"
+        eval-symlinks: true
+      - "/dev/tty"
+      - "/var/folders/"
+      # キャッシュ・ローカル
+      - "$HOME/.cache/"
+      - "$HOME/.local/"
+      - "$HOME/Library/Caches/"
+      - "$HOME/Library/Logs/"
+      - "$HOME/Library/Preferences/"
+      - "$HOME/Library/Saved Application State/"
+      - "$HOME/Downloads/"
+      - "$HOME/Desktop/"
+      # AI/LLM
+      - "$CLAUDE_CONFIG_DIR/"
+      - "$HOME/.claude/"
+      - "$HOME/.codex/"
+      - "$HOME/.serena/"
+      - "$HOME/.config/mcp/"
+      - "$HOME/.config/chezmoi/"
+      - "$HOME/.continue/"
+      - "$HOME/ghq/github.com/"
+      - "$HOME/Library/Application Support/Code/"
+      # Node.js/npm
+      - "$HOME/.npm"
+      - "$HOME/.node/"
+      - "$HOME/.nvm/"
+      - "$HOME/.yarn/"
+      - "$HOME/.pnpm-store/"
+      # Python
+      - "$HOME/.pyenv/"
+      - "$HOME/.virtualenvs/"
+      - "$HOME/.poetry/"
+      - "$HOME/.ruff/"
+      - "$HOME/.uv/"
+      # Rust
+      - "$HOME/.cargo/"
+      - "$HOME/.rustup/"
+      # Git/SSH
+      - "$HOME/.ssh/"
+      - "$HOME/.gitconfig"
+      # AWS
+      - "$HOME/.aws/cli/cache/"
+      - "$HOME/.aws/sso"
+      # ブラウザ（Playwright MCP等）
+      - "$HOME/Library/Application Support/Google/Chrome/"
+      - "$HOME/Library/Application Support/Chromium/"
+      - "$HOME/Library/Caches/com.google.Chrome/"
+      - "$HOME/Library/Application Support/Google/Chrome/Default/"
+      - "$HOME/Library/Application Support/Google/Chrome/Profile*/"
+      - "$HOME/Library/Application Support/CrashReporter/"
+      - "/Applications/Google Chrome.app/"
+      - "/Applications/Google Chrome Beta.app/"
+      - "/Applications/Google Chrome Canary.app/"
+      - "/Applications/Chromium.app/"
+      - "/System/Library/Extensions/"
+      - "/System/Library/Frameworks/"
+      - "/usr/lib/"
+      - "/usr/libexec/"
+      - "/private/var/db/"
+      - "/Library/GPUBundles/"
+    allow-keychain: true
+    allow-git: true
+
+# コマンドに応じて自動でプリセットを適用
+auto-presets:
+  # Claude Code
+  - command: claude
+    presets:
+      - claude-code
+
+  # Codex（claude-codeと同じ設定を使用）
+  - command: codex
+    presets:
+      - claude-code
+
+  # Node.js系
+  - command-pattern: ^(npm|npx|yarn|pnpm)$
+    presets:
+      - base
+      - npm
+
+  # Python系
+  - command-pattern: ^(python|python3|pip|pip3|poetry|uv)$
+    presets:
+      - base
+      - python
+
+  # Rust系
+  - command-pattern: ^(cargo|rustc|rustup)$
+    presets:
+      - base
+      - rust
+
+  # Git
+  - command: git
+    presets:
+      - base
+      - git
+
+  # draw.io
+  - command: drawio
+    presets:
+      - base
+      - drawio

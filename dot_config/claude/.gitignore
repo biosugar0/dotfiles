@@ -1,0 +1,38 @@
+# macOS
+.DS_Store
+
+# Claude Code runtime/cache
+.claude.json
+.claude.json.backup
+.claude/
+history.jsonl
+stats-cache.json
+
+# Session data
+debug/
+file-history/
+projects/
+session-env/
+shell-snapshots/
+todos/
+
+# MCP/Tool state
+.serena/
+chrome/
+extensions/
+ide/
+
+# Plugin cache/state
+plugins/cache/
+plugins/install-counts-cache.json
+plugins/installed_plugins.json
+plugins/marketplaces/
+plugins/repos/
+plugins/*.tar.gz
+
+# Temporary/Generated
+ai/
+plans/
+
+# Private/Sensitive (company-specific configs)
+commands/secret/

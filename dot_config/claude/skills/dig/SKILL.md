@@ -1,0 +1,18 @@
+---
+name: dig
+description: >-
+  Use when: planの確認・レビュー、仕様の詰め、要件の不明点がある、
+  「これで大丈夫？」「もう少し詰めたい」「曖昧な点がある」といった場面。
+user-invocable: true
+argument-hint: "[plan-file]"
+allowed-tools:
+  - Read
+  - Write
+  - Edit
+  - Grep
+  - Glob
+  - AskUserQuestion
+effort: high
+---
+
+Read ./INSTRUCTIONS.md and follow the instructions.

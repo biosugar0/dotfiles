@@ -1,0 +1,12 @@
+{
+  "name": "mid-implementation-incomplete",
+  "description": "実装途中で次ステップが明確かつ未完タスクがある場合は継続する",
+  "transcript": "[User]: pre-tool hook に --dry-run オプションを実装して、テストも追加してください。\n\n[Assistant]: 引数パースを確認してから実装します。\n\n[Tool Result]: rg \"dry-run|parseArgs\" dot_config/claude/hooks\n既存の dry-run 実装はありません。\n\n[Assistant]: parseArgs に dryRun を追加しました。次に dry-run 時の出力分岐と deno test を追加します。まだテストは未実行です。",
+  "annotations": [
+    "Verification evidence: NONE"
+  ],
+  "expected": {
+    "should_stop": false
+  },
+  "source": "synthetic:system-prompt-rule-mid-task-clear-next-steps"
+}

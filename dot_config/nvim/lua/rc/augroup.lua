@@ -1,0 +1,112 @@
+require("rc/util")
+
+local api = vim.api
+local fn = vim.fn
+local bo = vim.bo
+
+local MyAutoCmd = api.nvim_create_augroup("MyAutoCmd", { clear = true })
+
+-- ai-review filetype を登録
+vim.filetype.add({
+	pattern = {
+		["ai%-review.*"] = "ai-review",
+	},
+})
+
+-- gina-commit, ai-review を buflisted にする
+api.nvim_create_autocmd("FileType", {
+	group = MyAutoCmd,
+	pattern = { "gina-commit", "ai-review" },
+	callback = function()
+		bo.buflisted = true
+	end,
+})
+
+-- 保存時に存在しないディレクトリを作成
+api.nvim_create_autocmd({ "BufWritePre" }, {
+	group = MyAutoCmd,
+	pattern = "*",
+	callback = function()
+		local dir = fn.expand("<afile>:p:h")
+		local force = vim.v.cmdbang
+
+		if fn.isdirectory(dir) == 1 then
+			return
+		end
+
+		if not (force == 1) then
+			local result = fn.confirm(string.format('"%s" does not exist. Create?', dir), "&y\n&n")
+			if not (result == 1) then
+				print("Canceled")
+			end
+			fn.mkdir(dir, "p")
+		end
+	end,
+	once = false,
+})
+
+-- 末尾の空白削除
+api.nvim_create_autocmd("FileType", {
+	group = MyAutoCmd,
+	pattern = { "go", "sql", "python", "vim", "sh", "lua" },
+	command = [[autocmd BufWritePre * :%s/\s\+$//ge]],
+})
+
+--ファイルをひらいたとき最後にカーソルがあった場所に移動
+api.nvim_create_autocmd("BufReadPost", {
+	group = MyAutoCmd,
+	pattern = "*",
+	command = [[if line("'\"") >= 1 && line("'\"") <= line("$")  |   exe "normal! g`\""  | endif]],
+})
+
+-- BufWinEnterでカーソル位置を中央にする
+api.nvim_create_autocmd("BufWinEnter", {
+	group = MyAutoCmd,
+	pattern = "*",
+	command = [[if empty(&buftype) && line('.') > winheight(0) / 3 * 2 | execute 'normal! zz' .. repeat("\<C-y>", winheight(0) / 6) | endif]],
+})
+
+-- フォーカスが当たったら英数入力にする (VimEnterで遅延設定)
+api.nvim_create_autocmd("VimEnter", {
+	once = true,
+	callback = function()
+		if fn.executable("osascript") == 1 then
+			local force_alphanumeric_input_command = [[
+        osascript -e 'tell application "System Events" to key code 102' &
+      ]]
+			api.nvim_create_autocmd("FocusGained", {
+				group = MyAutoCmd,
+				pattern = "*",
+				callback = function()
+					fn.system(force_alphanumeric_input_command)
+				end,
+			})
+		end
+	end,
+})
+
+-- オートコメントを無効にする
+api.nvim_create_autocmd("FileType", {
+	group = vim.api.nvim_create_augroup("turn_off_auto_commenting", {}),
+	pattern = "*",
+	command = [[setlocal fo-=cro]],
+})
+
+-- :quit 時に特殊ウィンドウ (quickfix, help等) だけ残る問題を解決
+-- https://zenn.dev/vim_jp/articles/ff6cd224fab0c7
+api.nvim_create_autocmd("QuitPre", {
+	group = MyAutoCmd,
+	callback = function()
+		local current_win = api.nvim_get_current_win()
+		for _, win in ipairs(api.nvim_list_wins()) do
+			if win ~= current_win then
+				local buf = api.nvim_win_get_buf(win)
+				if bo[buf].buftype == "" then
+					return
+				end
+			end
+		end
+		vim.cmd.only({ bang = true })
+	end,
+	desc = "Close all special buffers and quit Neovim",
+})

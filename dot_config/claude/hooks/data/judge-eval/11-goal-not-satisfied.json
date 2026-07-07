@@ -1,0 +1,13 @@
+{
+  "name": "goal-not-satisfied",
+  "description": "Active goal が lint errors reach zero で直近 Tool Result に 3 errors がある場合は継続する",
+  "transcript": "[User]: lint errors reach zero まで直してください。\n\n[Assistant]: lint の現状を確認します。\n\n[Tool Result]: npm run lint\nsrc/components/Header.tsx\n  12:7  error  'title' is assigned a value but never used\nsrc/hooks/useUser.ts\n  8:10  error  'fetchUser' is defined but never used\nsrc/pages/index.tsx\n  31:5  error  React Hook useEffect has missing dependency: 'load'\n\n✖ 3 problems (3 errors, 0 warnings)\nexit code: 1\n\n[Assistant]: 3 errors が残っています。\n\n[Assistant]: 未使用変数と Hook 依存配列を修正して、もう一度 lint を実行します。",
+  "annotations": [
+    "Active goal（2ターン目）: lint errors reach zero",
+    "Verification evidence: NONE"
+  ],
+  "expected": {
+    "should_stop": false
+  },
+  "source": "synthetic:active-goal-lint-errors-not-zero"
+}

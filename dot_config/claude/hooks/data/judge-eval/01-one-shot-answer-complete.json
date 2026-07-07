@@ -1,0 +1,12 @@
+{
+  "name": "one-shot-answer-complete",
+  "description": "一問一答が完了している場合は停止してよい",
+  "transcript": "[User]: zsh で現在のディレクトリだけを表示するにはどうすればいい？\n\n[Assistant]: `basename \"$PWD\"` で現在のディレクトリ名だけを表示できます。プロンプト内なら `prompt_subst` を有効にして `$(basename \"$PWD\")` を使えます。",
+  "annotations": [
+    "Verification evidence: NONE"
+  ],
+  "expected": {
+    "should_stop": true
+  },
+  "source": "synthetic:system-prompt-rule-question-answered"
+}

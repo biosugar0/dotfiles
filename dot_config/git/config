@@ -1,0 +1,51 @@
+[user]
+	name = Yuto Kimura
+	email = biosugar0@gmail.com
+[core]
+	pager = delta
+	excludesFile = ~/.config/git/ignore
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true
+	side-by-side = true
+	line-numbers = true
+[mergetool]
+	keepBackup = false
+[fetch]
+	prune = true
+[push]
+	default = current
+	autoSetupRemote = true
+[pull]
+	rebase = false
+[commit]
+	verbose = true
+[status]
+	showUntrackedFiles = all
+[diff]
+	algorithm = histogram
+	colorMoved = dimmed-zebra
+	colorMovedWS = allow-indentation-change
+[color "status"]
+	added     = green
+	changed   = red
+	untracked = yellow
+	unmerged  = magenta
+[init]
+	defaultBranch = main
+[credential "https://github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[includeIf "gitdir:~/ghq/github.com/biosugar0/"]
+	path = ~/.config/git/config-biosugar0
+[ghq]
+	root = ~/ghq
+[wt]
+	basedir = .wt
+	copyignored = true
+	copy = .claude/settings.local.json
+	copy = .env*

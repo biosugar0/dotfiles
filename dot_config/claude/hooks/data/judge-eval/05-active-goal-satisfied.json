@@ -1,0 +1,13 @@
+{
+  "name": "active-goal-satisfied",
+  "description": "Active goal があり transcript に達成を示す tool 証拠がある場合は停止してよい",
+  "transcript": "[User]: deno test が通るまで修正してください。\n\n[Assistant]: 失敗箇所を直して deno test を実行します。\n\n[Tool Result]: deno test\nrunning 18 tests from 4 files\nok hooks/stop-hook_test.ts\nok hooks/session-context_test.ts\n18 passed | 0 failed\nexit code: 0\n\n[Assistant]: deno test が全て通りました。修正は完了です。",
+  "annotations": [
+    "Active goal（2ターン目）: deno test が通る",
+    "Verification evidence: PASS (fresh, matching HEAD)"
+  ],
+  "expected": {
+    "should_stop": true
+  },
+  "source": "synthetic:system-prompt-rule-active-goal-evidence"
+}

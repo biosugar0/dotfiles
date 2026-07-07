@@ -1,0 +1,86 @@
+#!/bin/bash
+# ai-memory-prune — ai/memory/*.md の prune 候補を提案する(自動削除はしない=人間承認) (PR3)
+#
+# 候補の条件:
+#   - deprecated: `Status: deprecated` を含む
+#   - expired: `Expires: YYYY-MM-DD` が今日より過去(日付以外の条件は人間が判断するので対象外)
+#   - oversized: 行数が --max-lines を超える(1 lesson/file 規律から逸脱=分割/整理のサイン)
+#
+# 使い方:
+#   ai-memory-prune [--dir <dir>] [--max-lines N]   # 既定: <repo>/ai/memory, 50 行
+#   ai-memory-prune --self-test
+#
+# 削除はしない。候補と理由を出すだけ。実際の削除/deprecated 化は人間が判断する。
+
+set -euo pipefail
+
+REPO=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+DIR="$REPO/ai/memory"
+MAX=50
+MODE=run
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dir) shift; DIR="$1" ;;
+    --dir=*) DIR="${1#--dir=}" ;;
+    --max-lines) shift; MAX="$1" ;;
+    --max-lines=*) MAX="${1#--max-lines=}" ;;
+    --self-test) MODE=self-test ;;
+    -h|--help) sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "ai-memory-prune: unknown option: $1" >&2; exit 64 ;;
+  esac
+  shift
+done
+case "$MAX" in ''|*[!0-9]*) echo "ai-memory-prune: --max-lines must be a number" >&2; exit 64 ;; esac
+
+scan() { # $1=dir $2=today(YYYY-MM-DD)  → 候補を "reason<TAB>file" で出力、見つかれば return 0
+  local dir="$1" today="$2" f reasons lines exp found=1
+  [ -d "$dir" ] || { return 1; }
+  for f in "$dir"/*.md; do
+    [ -e "$f" ] || continue
+    reasons=""
+    grep -qiE '^Status:[[:space:]]*deprecated' "$f" && reasons="${reasons}deprecated "
+    # Expires が日付っぽい値なら検査。厳密な YYYY-MM-DD のみ期限比較、不正形式(例 2026-99-99)は要修正として flag。
+    exp=$(grep -iE '^Expires:[[:space:]]*[0-9]{4}-[0-9]{2}-[0-9]{2}' "$f" | head -1 | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1 || true)
+    if [ -n "$exp" ]; then
+      if printf '%s' "$exp" | grep -qE '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'; then
+        [[ "$exp" < "$today" ]] && reasons="${reasons}expired($exp) "
+      else
+        reasons="${reasons}malformed-expires($exp) "
+      fi
+    fi
+    lines=$(wc -l < "$f" | tr -d ' ')
+    [ "$lines" -gt "$MAX" ] && reasons="${reasons}oversized(${lines}>${MAX}) "
+    if [ -n "$reasons" ]; then printf '%s\t%s\n' "${reasons% }" "$f"; found=0; fi
+  done
+  return $found
+}
+
+if [ "$MODE" = "self-test" ]; then
+  fail=0
+  T=$(mktemp -d /tmp/ai-memory-prune-st.XXXXXX)
+  printf 'good note\n\n## Rule: x\nStatus: verified\nExpires: 2999-01-01\n' > "$T/keep.md"
+  printf 'dep\n\n## Rule: y\nStatus: deprecated\n' > "$T/dep.md"
+  printf 'old\n\n## Rule: z\nStatus: verified\nExpires: 2000-01-01\n' > "$T/old.md"
+  printf 'bad\n\n## Rule: m\nStatus: verified\nExpires: 2026-99-99\n' > "$T/bad.md"
+  { echo summary; for i in $(seq 1 60); do echo "line $i"; done; } > "$T/big.md"
+  out=$(scan "$T" "2026-06-15" || true)
+  echo "$out" | grep -q 'dep.md' && grep -q 'deprecated' <<<"$out" && echo "  ok: deprecated 検出" || { echo "  FAIL: deprecated"; fail=1; }
+  grep -q 'expired(2000-01-01).*old.md' <<<"$out" && echo "  ok: expired 検出" || { echo "  FAIL: expired"; fail=1; }
+  grep -q 'malformed-expires(2026-99-99).*bad.md' <<<"$out" && echo "  ok: malformed Expires 検出" || { echo "  FAIL: malformed"; fail=1; }
+  grep -q 'oversized.*big.md' <<<"$out" && echo "  ok: oversized 検出" || { echo "  FAIL: oversized"; fail=1; }
+  grep -q 'keep.md' <<<"$out" && { echo "  FAIL: keep.md を誤検出"; fail=1; } || echo "  ok: 健全な note は候補にしない"
+  rm -rf "$T"
+  if [ "$fail" -eq 0 ]; then echo "SELF-TEST: PASS"; exit 0; else echo "SELF-TEST: FAIL"; exit 1; fi
+fi
+
+if [ ! -d "$DIR" ]; then echo "ai-memory-prune: no memory dir ($DIR) — nothing to prune"; exit 0; fi
+today=$(date +%Y-%m-%d)
+echo "=== prune 候補 (dir=$DIR, max-lines=$MAX) — 削除はしない。人間が承認して整理すること ==="
+if out=$(scan "$DIR" "$today"); then
+  printf '%s\n' "$out" | while IFS=$'\t' read -r reason file; do
+    printf '  [%s]\n    %s\n' "$reason" "$file"
+  done
+  echo "対応: 誤りなら削除、古いだけなら再検証して Last verified/Expires 更新、肥大なら 1 lesson/file に分割。"
+else
+  echo "  候補なし(健全)。"
+fi

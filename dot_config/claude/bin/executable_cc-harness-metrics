@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# cc-harness-metrics: hook 自己ログ(harness-events.jsonl)を集計し、harness の有効性を可視化する。
+#
+# harness-audit skill のデータ源。transcript には hook の deny/block 決定が記録されない
+# (hook stdout は jsonl に残らない)ため、各 hook が hooks/lib/harness-log.{sh,ts} 経由で
+# 残したイベントを読む。「発火しない hook = 行動変化済み or 死に設定」の判定に使う。
+#
+# 使い方: cc-harness-metrics [--days N]   (default: 30)
+set -euo pipefail
+
+days=30
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --days)
+      days="$2"
+      shift 2
+      ;;
+    -h | --help)
+      echo "usage: cc-harness-metrics [--days N]"
+      exit 0
+      ;;
+    *)
+      echo "unknown arg: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+# ロガー(hooks/lib/harness-log.{sh,ts})と揃えた固定パス。XDG_STATE_HOME は意図的に
+# 見ない(stop-hook の Deno shebang が ${HOME} しか展開できず、出力先が割れるため)。
+file="$HOME/.local/state/claude/harness-events.jsonl"
+if [ ! -f "$file" ]; then
+  echo "イベントログがまだ無い: $file" >&2
+  echo "(hook が deny/block/warn/reroute した時点から記録が始まる)" >&2
+  exit 1
+fi
+
+# BSD date(macOS) → GNU date の順でフォールバック。ISO 8601 UTC は辞書順比較可能。
+cutoff=$(date -u -v -"${days}"d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null ||
+  date -u -d "-${days} days" +%Y-%m-%dT%H:%M:%SZ)
+
+echo "## Harness events (直近 ${days} 日, since ${cutoff})"
+echo "source: ${file}"
+echo
+
+# 壊れた行(部分書き込み等)は fromjson? で読み飛ばす
+events=$(jq -cR 'fromjson? // empty' "$file")
+
+printf '%s\n' "$events" | jq -rs --arg cutoff "$cutoff" '
+  map(select(.ts >= $cutoff))
+  | if length == 0 then "イベントなし" else
+      group_by(.hook + "/" + .event)
+      | map({hook: .[0].hook, event: .[0].event, count: length})
+      | sort_by(-.count)
+      | (["hook", "event", "count"], (.[] | [.hook, .event, (.count | tostring)]))
+      | @tsv
+    end' | column -t -s "$(printf '\t')"
+
+echo
+
+# stop-hook の block 率: allow(停止許可) を分母に含めることでゲートの介入率が出る
+printf '%s\n' "$events" | jq -rs --arg cutoff "$cutoff" '
+  map(select(.ts >= $cutoff and .hook == "stop-hook"))
+  | (map(select(.event | startswith("block:"))) | length) as $blocks
+  | (map(select(.event | startswith("allow:"))) | length) as $allows
+  | if ($blocks + $allows) == 0 then "stop-hook: イベントなし"
+    else "stop-hook block rate: \($blocks)/\($blocks + $allows) (\(100 * $blocks / ($blocks + $allows) | floor)%)"
+    end'
+
+echo
+echo "## Goal funnel"
+printf '%s\n' "$events" | jq -rs --arg cutoff "$cutoff" '
+  def has_data: (.data? | type) == "object";
+  def goal_id: (.data // {} | .goal_id? // .goalId? // .id?);
+  def goal_key: (goal_id | tostring);
+  def iteration:
+    (.data // {} | .iteration? // .turns? // .turn? | tonumber?);
+  # turns の元データは judge イベントに限らず、goal_id + iteration を持つ全 stop-hook
+  # 判定イベント(allow:goal_verified / block:goal_* 含む)から取る。judge 限定にすると
+  # 決定的判定で終わった goal の turns が常に null になる。
+  def has_iteration:
+    .hook == "stop-hook" and (.event != "goal:set") and (.event != "goal:cleared");
+  def outcome:
+    (.data // {} | .cause? // .outcome? // "") as $cause
+    | if $cause == "verified" then "verified"
+      elif $cause == "haiku_stop" or $cause == "haiku" or $cause == "stop" then "haiku_stop"
+      elif $cause == "turn_limit" or $cause == "goal_turn_limit" then "turn_limit"
+      elif $cause == "spin" or $cause == "goal_spin" then "spin"
+      elif $cause == "error_stuck" or $cause == "goal_error_stuck" then "error_stuck"
+      elif $cause == "impossible" then "impossible"
+      elif $cause == "user_new_message" or $cause == "abandoned" or $cause == "user_message" then "user_new_message"
+      elif ($cause | length) > 0 then $cause
+      else "unknown"
+      end;
+  def fmt_avg:
+    if . == null then "-"
+    else ((. * 10 | round) / 10 | tostring)
+    end;
+  map(select(.ts >= $cutoff)) as $all
+  | ($all | map(select(.event == "goal:set" and has_data and goal_id != null))) as $sets
+  | if ($sets | length) == 0 then "(まだデータなし)"
+    else
+      ($all
+        | map(select(.event == "goal:cleared" and has_data and goal_id != null))
+        | group_by(goal_key)
+        | map({key: (.[0] | goal_key), value: (sort_by(.ts)[-1])})
+        | from_entries) as $cleared
+      | ($all
+        | map(select(has_iteration and has_data and goal_id != null and iteration != null))
+        | group_by(goal_key)
+        | map({key: (.[0] | goal_key), value: (map(iteration) | max)})
+        | from_entries) as $turns
+      | ($sets
+        | group_by(goal_key)
+        | map(.[0])
+        | map({
+            goal_id: goal_key,
+            outcome: (if $cleared[goal_key] then ($cleared[goal_key] | outcome) else "open" end),
+            turns: (if $cleared[goal_key] then ($turns[goal_key] // null) else null end)
+          })) as $goals
+      | ["verified","haiku_stop","turn_limit","spin","error_stuck","impossible","user_new_message","open"] as $order
+      | ($goals
+        | group_by(.outcome)
+        | map({
+            outcome: .[0].outcome,
+            count: length,
+            avg_turns: (map(select(.turns != null).turns) as $xs | if ($xs | length) == 0 then null else (($xs | add) / ($xs | length)) end),
+            max_turns: (map(select(.turns != null).turns) | if length == 0 then null else max end)
+          })
+        | sort_by((.outcome as $o | $order | index($o)) // 999, .outcome)
+        | (["outcome","count","avg_turns","max_turns"],
+           (.[] | [.outcome, (.count | tostring), (.avg_turns | fmt_avg), ((.max_turns // "-") | tostring)]))
+        | @tsv)
+    end' | column -t -s "$(printf '\t')"
+
+echo
+echo "## Haiku stop decision breakdown"
+printf '%s\n' "$events" | jq -rs --arg cutoff "$cutoff" '
+  map(select(
+    .ts >= $cutoff
+    and .hook == "stop-hook"
+    and (.event == "allow:stop" or .event == "block:stop_gate")
+    and ((.data? | type) == "object")
+  ))
+  | if length == 0 then "(まだデータなし)"
+    else
+      group_by([.event, (.data.evidence_source // "(unknown)"), (.data.confidence // "(unknown)")])
+      | map({
+          event: .[0].event,
+          evidence_source: (.[0].data.evidence_source // "(unknown)"),
+          confidence: (.[0].data.confidence // "(unknown)"),
+          count: length
+        })
+      | sort_by(.event, .evidence_source, .confidence)
+      | (["event","evidence_source","confidence","count"],
+         (.[] | [.event, .evidence_source, .confidence, (.count | tostring)]))
+      | @tsv
+    end' | column -t -s "$(printf '\t')"
+
+echo
+echo "## Stop decision sources"
+printf '%s\n' "$events" | jq -rs --arg cutoff "$cutoff" '
+  map(select(
+    .ts >= $cutoff
+    and .hook == "stop-hook"
+    and ((.data? | type) == "object")
+    and (.data.decision_source? != null)
+  )) as $rows
+  | if ($rows | length) == 0 then "(まだデータなし)"
+    else
+      ($rows
+        | group_by(.data.decision_source)
+        | map({decision_source: (.[0].data.decision_source | tostring), count: length})
+        | sort_by(-.count, .decision_source)) as $counts
+      | ($rows | map(select((.data.decision_source | tostring) != "haiku")) | length) as $det
+      | ($rows | length) as $total
+      | "deterministic decision rate: \($det)/\($total) (\(100 * $det / $total | floor)%)",
+        (["decision_source","count"],
+         ($counts[] | [.decision_source, (.count | tostring)])
+         | @tsv)
+    end' | column -t -s "$(printf '\t')"

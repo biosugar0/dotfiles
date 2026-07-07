@@ -1,0 +1,12 @@
+{
+  "name": "reactor-goal-monitor",
+  "description": "PR 作成済みで外部 CI 完了待ちを表明しているが Monitor 未使用の場合は停止してよい",
+  "transcript": "[User]: この修正を PR にして、CI が通ったら教えてください。\n\n[Assistant]: 変更内容を確認して PR を作成します。\n\n[Tool Result]: git status --short\nM src/auth.ts\nM tests/auth.test.ts\n\n[Tool Result]: gh pr create --title \"Fix auth retry\" --body \"Updates retry handling and tests.\"\nhttps://github.com/example/repo/pull/248\n\n[Assistant]: PR #248 を作成しました。\n\n[Assistant]: CI は GitHub Actions 側で実行中です。\n\n[Assistant]: ここからは外部 CI の完了待ちになります。結果が出たら確認します。\n\n[Assistant]: Monitor はまだ起動していません。必要なら `gh pr checks 248 --watch` のような監視を設定してください。",
+  "annotations": [
+    "Verification evidence: NONE"
+  ],
+  "expected": {
+    "should_stop": true
+  },
+  "source": "synthetic:reactor-condition-ci-wait-no-monitor"
+}
